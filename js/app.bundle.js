@@ -1,4 +1,4 @@
-/* Jamylle's Castle v0.5.1 — bundle sem módulos ES
+/* Jamylle's Castle v0.5.2 — bundle sem módulos ES
    Este arquivo permite abrir index.html diretamente no navegador via duplo clique. */
 
 /* ===== js/rules.js ===== */
@@ -1559,7 +1559,7 @@ function showPlannedOnlineInfo(){
 }
 
 function showRules(){
-    alert('Regras v0.5.1:\n\n1. O início da primeira partida acontece por sorteio.\n2. Mesa livre: jogue uma ou mais cartas do mesmo valor.\n3. Mesa ocupada: jogue a mesma quantidade de cartas com valor maior.\n4. Ao jogar 2, ou coringa se estiver ativado, a mesa limpa automaticamente e quem jogou inicia nova rodada.\n5. Coringas são opcionais e começam desativados por padrão.\n6. Na revanche, Majestade/Aldeão e Regente/Plebeu trocam cartas automaticamente.\n7. A última jogada antes de limpar a mesa fica visível por pelo menos 0,5s para leitura estratégica.\n8. A v0.5.1 adiciona distribuição animada, jogadas cinematográficas e cerimônia da corte.');
+    alert('Regras v0.5.2:\n\n1. O início da primeira partida acontece por sorteio.\n2. Mesa livre: jogue uma ou mais cartas do mesmo valor.\n3. Mesa ocupada: jogue a mesma quantidade de cartas com valor maior.\n4. Ao jogar 2, ou coringa se estiver ativado, a mesa limpa automaticamente e quem jogou inicia nova rodada.\n5. Coringas são opcionais e começam desativados por padrão.\n6. Na revanche, Majestade/Aldeão e Regente/Plebeu trocam cartas automaticamente.\n7. A última jogada antes de limpar a mesa fica visível por pelo menos 0,5s para leitura estratégica.\n8. A v0.5.2 adiciona distribuição animada, jogadas cinematográficas e cerimônia da corte.');
 }
 
 function backToMenu(){

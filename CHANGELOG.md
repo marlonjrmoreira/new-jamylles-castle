@@ -121,3 +121,12 @@
 - Bots, baralhos, senha, coringas e observadores passam a fazer parte da configuração da sala.
 - Lobby online agora exibe configurações da sala, incluindo quantidade de bots.
 - Busca de sala funciona por código/nome exato da sala.
+
+
+## v0.5.2
+- Nome do jogador agora aparece explicitamente dentro da janela de sala online.
+- Anfitrião agora tem botão `Iniciar partida`.
+- O início é forçado pelo anfitrião: não depende de todos clicarem em pronto.
+- A sala pode iniciar quando houver pelo menos 3 participantes somando humanos e bots.
+- Quando o anfitrião inicia, todos os jogadores são levados para a mesa online.
+- A mesa online ainda é uma tela de transição; a próxima etapa conectará distribuição, mãos privadas e turnos sincronizados.

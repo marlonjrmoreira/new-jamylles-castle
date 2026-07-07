@@ -1,4 +1,4 @@
-/* Jamylle's Castle v0.5.1 — Lobby multiplayer online via Firebase
+/* Jamylle's Castle v0.5.2 — Lobby multiplayer online via Firebase
    Fundação: criar sala, entrar por código, senha, host e pronto/não pronto.
    A partida online jogável e WebRTC serão conectados nas próximas versões. */
 
@@ -39,6 +39,7 @@
         dom.readyButton = qs('#readyButton');
         dom.startButton = qs('#startOnlineButton');
         dom.playerName = qs('#playerName');
+        dom.onlinePlayerName = qs('#onlinePlayerName');
         dom.menuRoomName = qs('#roomName');
         dom.menuPassword = qs('#roomPassword');
         dom.deckCount = qs('#deckCount');
@@ -65,7 +66,12 @@
     }
 
     function getPlayerName(){
-        return String(dom.playerName?.value || 'Jogador').trim().slice(0, 16) || 'Jogador';
+        const modalName = String(dom.onlinePlayerName?.value || '').trim();
+        const menuName = String(dom.playerName?.value || '').trim();
+        const name = (modalName || menuName || 'Jogador').slice(0, 16);
+        if(dom.playerName && name) dom.playerName.value = name;
+        if(dom.onlinePlayerName && name) dom.onlinePlayerName.value = name;
+        return name || 'Jogador';
     }
 
     function simpleHash(text){
@@ -120,6 +126,9 @@
     function openOnlineModal(){
         collectDom();
         if(dom.modal) dom.modal.hidden = false;
+        if(dom.onlinePlayerName && !dom.onlinePlayerName.value){
+            dom.onlinePlayerName.value = String(dom.playerName?.value || '').trim() || 'Jogador';
+        }
         if(dom.roomCode && !dom.roomCode.value){
             dom.roomCode.value = normalizeRoomCode(dom.menuRoomName?.value || 'CASTELO');
         }
@@ -137,6 +146,7 @@
         if(dom.modal) dom.modal.hidden = false;
         if(!await ensureReady()) return;
         const code = normalizeRoomCode(dom.roomCode?.value || dom.menuRoomName?.value || 'CASTELO');
+        if(dom.roomCode) dom.roomCode.value = code;
         const password = String(dom.password?.value || dom.menuPassword?.value || '').trim();
         const ref = roomRef(code);
         const snapshot = await ref.get();
@@ -184,7 +194,8 @@
     async function joinRoom(){
         if(dom.modal) dom.modal.hidden = false;
         if(!await ensureReady()) return;
-        const code = normalizeRoomCode(dom.roomCode?.value || '');
+        const code = normalizeRoomCode(dom.roomCode?.value || dom.menuRoomName?.value || '');
+        if(dom.roomCode) dom.roomCode.value = code;
         const password = String(dom.password?.value || '').trim();
         const ref = roomRef(code);
         const snapshot = await ref.get();
@@ -279,14 +290,23 @@
 
         const isHost = currentUser?.uid === currentRoom.hostUid;
         const me = currentPlayers.find(player => player.uid === currentUser?.uid);
-        const allReady = currentPlayers.length >= 2 && currentPlayers.every(player => player.ready || player.uid === currentRoom.hostUid);
+        const botCount = Number(currentRoom.botCount || 0);
+        const totalParticipants = currentPlayers.length + botCount;
+        const canForceStart = isHost && totalParticipants >= 3;
+
+        if(currentRoom.phase === 'playing'){
+            enterOnlineTable();
+        }
 
         if(dom.readyButton){
             dom.readyButton.textContent = me?.ready ? 'Estou pronto ✓' : 'Estou pronto';
         }
         if(dom.startButton){
-            dom.startButton.disabled = !isHost || !allReady;
-            dom.startButton.textContent = isHost ? 'Iniciar online' : 'Aguardando host';
+            dom.startButton.disabled = !canForceStart;
+            dom.startButton.textContent = isHost ? 'Iniciar partida' : 'Aguardando anfitrião';
+            dom.startButton.title = canForceStart
+                ? 'Forçar início da partida para todos na sala.'
+                : 'A sala precisa ter pelo menos 3 participantes somando jogadores humanos e bots.';
         }
 
         const roomMeta = `
@@ -306,9 +326,11 @@
         }).join('');
 
         const phaseText = currentRoom.phase === 'lobby'
-            ? 'Lobby sincronizado. Jogadores podem marcar pronto.'
-            : `Estado da sala: ${currentRoom.phase}`;
-        setStatus(`${phaseText} Jogadores: ${currentPlayers.length}.`, 'ok');
+            ? 'Lobby sincronizado. O anfitrião pode iniciar quando houver participantes suficientes.'
+            : currentRoom.phase === 'playing'
+                ? 'Partida iniciada. Todos estão sendo levados para a mesa online.'
+                : `Estado da sala: ${currentRoom.phase}`;
+        setStatus(`${phaseText} Jogadores: ${currentPlayers.length}. Bots: ${Number(currentRoom.botCount || 0)}.`, 'ok');
     }
 
     async function toggleReady(){
@@ -323,24 +345,98 @@
     async function startOnline(){
         if(!currentRoomCode || !currentUser || !currentRoom) return;
         if(currentUser.uid !== currentRoom.hostUid){
-            setStatus('Apenas o host pode iniciar a partida online.', 'error');
+            setStatus('Apenas o anfitrião pode iniciar a partida.', 'error');
             return;
         }
 
-        const allReady = currentPlayers.length >= 2 && currentPlayers.every(player => player.ready || player.uid === currentRoom.hostUid);
-        if(!allReady){
-            setStatus('Aguarde pelo menos 2 jogadores humanos prontos. Em versão futura, bots do anfitrião complementarão a mesa online.', 'error');
+        const botCount = Number(currentRoom.botCount || 0);
+        const totalParticipants = currentPlayers.length + botCount;
+        if(totalParticipants < 3){
+            setStatus('A partida precisa de pelo menos 3 participantes somando jogadores humanos e bots.', 'error');
             return;
         }
 
         await roomRef(currentRoomCode).set({
-            phase: 'ready-to-start',
+            phase: 'playing',
+            startedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             gameStateVersion: firebase.firestore.FieldValue.increment(1),
-            publicMessage: 'Host iniciou a partida online. A sincronização jogável será conectada na próxima versão.',
+            forcedStartByHost: true,
+            publicMessage: 'O anfitrião iniciou a partida. Todos entram na mesa online.',
         }, { merge: true });
 
-        setStatus('Partida online marcada como pronta. Próxima versão conectará o jogo em tempo real.', 'ok');
+        setStatus('Partida iniciada pelo anfitrião. Abrindo mesa online...', 'ok');
+        enterOnlineTable();
+    }
+
+
+    function enterOnlineTable(){
+        if(!currentRoom || !currentRoomCode) return;
+
+        if(dom.modal) dom.modal.hidden = true;
+
+        const menuScreen = document.querySelector('#menuScreen');
+        const gameScreen = document.querySelector('#gameScreen');
+        menuScreen?.classList.remove('active');
+        gameScreen?.classList.add('active');
+
+        const roomInfo = document.querySelector('#roomInfo');
+        const turnInfo = document.querySelector('#turnInfo');
+        const ruleHint = document.querySelector('#ruleHint');
+        const playersSummary = document.querySelector('#playersSummary');
+        const tableCards = document.querySelector('#tableCards');
+        const roundHistory = document.querySelector('#roundHistory');
+        const playerHand = document.querySelector('#playerHand');
+        const selectionMessage = document.querySelector('#selectionMessage');
+        const playButton = document.querySelector('#playButton');
+        const passButton = document.querySelector('#passButton');
+        const rematchButton = document.querySelector('#rematchButton');
+
+        if(roomInfo) roomInfo.textContent = `Sala online ${currentRoomCode}`;
+        if(turnInfo) turnInfo.textContent = 'Partida online iniciada';
+        if(ruleHint) ruleHint.textContent = 'O anfitrião iniciou a sala. A sincronização jogável completa vem na próxima etapa.';
+
+        const botCount = Number(currentRoom.botCount || 0);
+        const playerRows = currentPlayers.map(player => {
+            const isHost = player.uid === currentRoom.hostUid;
+            return `<article class="playerBadge ${isHost ? 'active' : ''}">
+                <strong>${escapeHtml(player.name || 'Jogador')}</strong>
+                <span>${isHost ? 'Anfitrião' : 'Jogador online'}</span>
+                ${player.ready ? '<em>Pronto</em>' : ''}
+            </article>`;
+        }).join('');
+
+        const botRows = Array.from({ length: botCount }, (_, index) => `
+            <article class="playerBadge">
+                <strong>Bot ${index + 1}</strong>
+                <span>Controlado pelo anfitrião</span>
+                <em>IA</em>
+            </article>
+        `).join('');
+
+        if(playersSummary) playersSummary.innerHTML = playerRows + botRows;
+        if(tableCards){
+            tableCards.innerHTML = `
+                <div class="onlineTableNotice">
+                    <strong>Portões da sala abertos</strong>
+                    <span>O anfitrião iniciou a partida online.</span>
+                    <small>Próxima etapa: distribuição sincronizada, mãos privadas e turnos em tempo real.</small>
+                </div>
+            `;
+        }
+        if(roundHistory) roundHistory.innerHTML = '<span>Aguardando primeira jogada online sincronizada.</span>';
+        if(playerHand){
+            playerHand.innerHTML = `
+                <p class="observerNotice">
+                    Você está na mesa online da sala <strong>${escapeHtml(currentRoomCode)}</strong>.<br>
+                    Esta versão confirma o início forçado para todos. A próxima versão conectará sua mão privada.
+                </p>
+            `;
+        }
+        if(selectionMessage) selectionMessage.textContent = 'Mesa online aberta. Sincronização jogável será conectada na próxima etapa.';
+        if(playButton) playButton.disabled = true;
+        if(passButton) passButton.disabled = true;
+        if(rematchButton) rematchButton.hidden = true;
     }
 
     async function leaveRoom(){
@@ -410,5 +506,6 @@
     window.jcOnline = {
         openLobby: openOnlineModal,
         getCurrentRoomCode: () => currentRoomCode,
+        enterOnlineTable,
     };
 })();

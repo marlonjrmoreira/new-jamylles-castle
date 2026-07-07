@@ -92,7 +92,7 @@
                 </div>
                 <button class="menuButton secondary" data-action="observer-preview">Prévia Observador Seguro</button>
                 <button class="menuButton secondary" data-action="rules">Regras</button>
-                <span class="versionTag">v0.5.1 — sala unificada</span>
+                <span class="versionTag">v0.5.2 — início forçado</span>
             </section>
         </div>
     </main>
@@ -179,6 +179,10 @@
 
             <div class="onlineGrid">
                 <label>
+                    Nome do jogador
+                    <input id="onlinePlayerName" type="text" maxlength="16" placeholder="Seu nome">
+                </label>
+                <label>
                     Código da sala
                     <input id="onlineRoomCode" type="text" maxlength="18" placeholder="Ex.: CASTELO26">
                 </label>
@@ -201,12 +205,12 @@
                 <div id="onlinePlayersList" class="onlinePlayersList"></div>
                 <div class="modalActions onlineActions">
                     <button class="menuButton secondary" data-online-action="toggle-ready" type="button" id="readyButton">Estou pronto</button>
-                    <button class="menuButton" data-online-action="start-online" type="button" id="startOnlineButton" disabled>Iniciar online</button>
+                    <button class="menuButton" data-online-action="start-online" type="button" id="startOnlineButton" disabled>Iniciar partida</button>
                     <button class="menuButton secondary" data-online-action="leave-room" type="button">Sair da sala</button>
                 </div>
                 <p class="onlineHint">
-                    v0.5.1 unifica o fluxo: criar sala, buscar sala, bots, baralhos, senha, host e jogadores prontos.
-                    A partida online jogável e a voz serão conectadas nas próximas versões.
+                    v0.5.2 adiciona início forçado pelo anfitrião, nome claro do jogador e entrada visual na mesa online.
+                    A mesa online já abre para todos; as jogadas sincronizadas entram na próxima etapa.
                 </p>
             </section>
 

@@ -90,3 +90,14 @@ A sala é buscada por código/nome exato. Exemplo:
 
 Bots no multiplayer ficam salvos como configuração da sala (`botCount`).
 Na próxima etapa jogável, o host será responsável por controlar esses bots.
+
+
+## v0.5.2 — Início forçado
+
+O anfitrião pode iniciar a partida sem depender de todos marcarem pronto.
+Condição mínima: 3 participantes somando jogadores humanos e bots.
+
+Exemplos:
+- 1 humano + 2 bots = pode iniciar.
+- 2 humanos + 1 bot = pode iniciar.
+- 3 humanos + 0 bots = pode iniciar.
