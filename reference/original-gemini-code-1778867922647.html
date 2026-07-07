@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jamylle's Castle - Presidente Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <style>
+        /* === RESET E ESTRUTURA BÁSICA === */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Times New Roman", serif; }
+        button, .card, .table-cards-container { touch-action: manipulation; }
+
+        /* === TEMAS DO FUNDO === */
+        body { margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: background 0.8s ease; }
+        body.theme-lobby { background: linear-gradient(135deg, #1a0b2e 0%, #3b1b54 50%, #150824 100%); }
+        body.theme-table { background: radial-gradient(circle at top, #157347, #0b3d25 70%); }
+        
+        @keyframes fall { 0% { transform: translate(0, 0) rotate(15deg); } 100% { transform: translate(100vw, 100vh) rotate(45deg); } }
+        @keyframes idleBreathe { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-8px) scaleY(1.02); } }
+        @keyframes floatText { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+        /* === TELA DE SETUP (LOBBY JAMYLLE'S CASTLE) === */
+        #setup-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 20; }
+        
+        #rain-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 1; }
+        .chinelo-rain { position: absolute; top: -50px; opacity: 0.4; animation: fall linear infinite; }
+
+        .lobby-container { position: relative; z-index: 10; background: rgba(0, 0, 0, 0.75); border: 4px solid #f1c40f; border-radius: 16px; padding: 25px; width: 95%; max-width: 450px; max-height: 95vh; overflow-y: auto; box-shadow: 0 15px 35px rgba(0,0,0,0.8), inset 0 0 20px rgba(241, 196, 15, 0.2); text-align: center; backdrop-filter: blur(5px); }
+        .lobby-container::-webkit-scrollbar { width: 5px; }
+        .lobby-container::-webkit-scrollbar-thumb { background: #f1c40f; border-radius: 5px; }
+
+        .title-box { margin-bottom: 20px; }
+        .title-box h1 { font-family: 'Press Start 2P', cursive; font-size: 20px; color: #f1c40f; text-shadow: 3px 3px 0px #8e44ad; line-height: 1.4; margin-bottom: 5px; }
+        .title-box p { font-family: 'Press Start 2P', cursive; font-size: 10px; color: #bdc3c7; letter-spacing: 1px; }
+
+        .avatar-selection { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; }
+        .avatar-btn { background: none; border: none; color: #f1c40f; font-family: 'Press Start 2P', cursive; font-size: 20px; cursor: pointer; transition: transform 0.1s; }
+        .avatar-btn:active { transform: scale(0.8); }
+        .avatar-display { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border: 3px solid #f1c40f; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-family: 'Press Start 2P', cursive; font-size: 9px; color: #f1c40f; margin-bottom: 5px; }
+        .input-group input[type="text"] { width: 100%; padding: 10px; background: rgba(0,0,0,0.5); border: 2px solid #555; border-radius: 6px; color: white; font-family: 'VT323', monospace; font-size: 20px; outline: none; text-align: center; }
+        .input-group input[type="text"]:focus { border-color: #f1c40f; }
+
+        /* Painel de Host */
+        #host-panel { display: none; background: rgba(142, 68, 173, 0.2); padding: 15px; border-radius: 8px; border: 1px solid rgba(241, 196, 15, 0.5); margin-bottom: 15px; }
+        
+        /* Painel de Join */
+        #join-panel { display: none; margin-bottom: 15px; }
+
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .settings-grid .input-group { margin-bottom: 0; text-align: center; }
+        .settings-grid input[type="number"] { width: 80%; padding: 8px; background: rgba(0,0,0,0.8); border: 2px solid #f1c40f; border-radius: 6px; color: white; font-family: 'VT323', monospace; font-size: 16px; text-align: center; }
+        .checkbox-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+        .checkbox-container input[type="checkbox"] { transform: scale(1.5); margin-top: 5px; accent-color: #8e44ad; }
+
+        /* Botões Iniciais */
+        .btn-action { width: 100%; padding: 12px; font-family: 'Press Start 2P', cursive; font-size: 10px; cursor: pointer; border-radius: 8px; margin-bottom: 10px; border: 2px solid #fff; transition: transform 0.1s;}
+        .btn-action:active { transform: scale(0.95); }
+        .btn-create { background: #8e44ad; color: white; }
+        .btn-join { background: #e67e22; color: white; }
+
+        .btn-start { width: 100%; padding: 15px; background: #2ecc71; color: white; border: 3px solid #fff; border-radius: 8px; font-family: 'Press Start 2P', cursive; font-size: 10px; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 0 #27ae60;}
+        .btn-start:active { transform: translateY(4px); box-shadow: 0 0 0 #27ae60; }
+        .btn-start:disabled { background: #7f8c8d; border-color: #bdc3c7; box-shadow: 0 4px 0 #95a5a6; cursor: not-allowed; }
+
+        .btn-discord { width: 100%; padding: 10px; background: #5865F2; color: white; border: 2px solid white; border-radius: 8px; font-family: 'Press Start 2P', cursive; font-size: 9px; cursor: pointer; margin-top: 10px; box-shadow: 0 3px 0 #404eed;}
+        .btn-discord:active { transform: translateY(3px); box-shadow: 0 0 0 #404eed; }
+
+        .status-rede { font-family: 'VT323', monospace; font-size: 18px; color: #f1c40f; margin-top: 10px; }
+
+        /* === A PRINCESA JAMYLLE (GLOBAL) === */
+        .jamylle-container { position: absolute; bottom: 20px; right: 30px; z-index: 25; display: flex; flex-direction: column; align-items: center; pointer-events: none; transition: all 0.8s ease; }
+        .jamylle-sprite { width: 90px; height: 110px; animation: idleBreathe 2.5s infinite ease-in-out; filter: drop-shadow(0px 10px 5px rgba(0,0,0,0.6)); }
+        .jamylle-name { font-family: 'Press Start 2P', cursive; font-size: 8px; color: #fcd82e; margin-top: 10px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; border: 1px solid #fcd82e; animation: floatText 2.5s infinite ease-in-out; }
+        
+        body.theme-table .jamylle-container { bottom: 230px; right: 10px; transform: scale(0.85); z-index: 2; }
+
+        /* === MESA DE JOGO === */
+        #game-screen { display: none; flex-grow: 1; flex-direction: column; justify-content: space-between; position: relative; padding-top: 10px; z-index: 10; }
+        
+        @keyframes shake { 0%, 30%, 60%, 90% { transform: translate(1px, 1px) rotate(0deg); } 10%, 50%, 80%, 100% { transform: translate(-1px, -2px) rotate(-1deg); } 20%, 40%, 70% { transform: translate(-3px, 0px) rotate(1deg); } }
+        @keyframes shockwave { 0% { transform: scale(0.5); opacity: 1; border-width: 20px; } 100% { transform: scale(3.5); opacity: 0; border-width: 1px; } }
+        @keyframes comboText { 0% { transform: translateY(0); opacity: 0; scale: 0.5; } 20% { transform: translateY(-20px); opacity: 1; scale: 1.2; } 80% { transform: translateY(-40px); opacity: 1; scale: 1; } 100% { transform: translateY(-60px); opacity: 0; } }
+        @keyframes sweepCards { 0% { transform: translateX(0) rotate(0); opacity: 1; } 100% { transform: translateX(100vw) rotate(45deg); opacity: 0; } }
+        @keyframes dropCard { 0% { transform: scale(1.5) translateY(-50px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+        @keyframes bgPulse { 0% { background: radial-gradient(circle at top, #5c0d0d, #2a0303 70%); } 100% { background: radial-gradient(circle at top, #8a1414, #4a0606 70%); } }
+
+        .shake-active { animation: shake 0.4s infinite; }
+        .shake-once { animation: shake 0.3s; }
+        .sweep-animation { animation: sweepCards 0.5s forwards ease-in; }
+        .drop-animation { animation: dropCard 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        body.bg-heat-1 { background: radial-gradient(circle at top, #4a6315, #2d3d0b 70%); }
+        body.bg-heat-2 { background: radial-gradient(circle at top, #733d15, #421e07 70%); }
+        body.bg-heat-3 { animation: bgPulse 2s infinite alternate; }
+        body.ultimate-active { background: radial-gradient(circle at top, #2e0000, #000000 70%); }
+
+        .opponents-container { display: flex; justify-content: center; gap: 10px; padding: 10px; background: rgba(0,0,0,0.3); box-shadow: 0 4px 10px rgba(0,0,0,0.4); z-index: 5; font-family: 'Segoe UI', sans-serif; flex-wrap: wrap; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .opponent-box { background: rgba(0, 68, 23, 0.8); border: 2px solid rgba(0, 43, 14, 0.9); backdrop-filter: blur(5px); border-radius: 6px; padding: 6px 12px; color: white; text-align: center; font-weight: bold; font-size: 12px; transition: all 0.2s; position: relative; }
+        .opponent-box.active { background: #ffeb3b; color: #000; border-color: #f57f17; box-shadow: 0 0 10px rgba(255,235,59,0.8); transform: translateY(-3px); }
+        .opponent-box.finished { background: rgba(51, 51, 51, 0.8); color: #aaa; border-color: #222; opacity: 0.8; }
+        .rank-badge { position: absolute; top: -10px; right: -10px; background: #e51400; color: white; font-size: 9px; padding: 2px 5px; border-radius: 10px; border: 1px solid white; display: none; }
+        .opponent-box.finished .rank-badge { display: block; }
+
+        .center-table { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        .table-cards-container { display: flex; justify-content: center; align-items: center; min-height: 220px; min-width: 160px; border: 3px dashed rgba(255,255,255,0.2); border-radius: 14px; position: relative; cursor: pointer; transition: all 0.3s ease; }
+        
+        .heat-1 { box-shadow: 0 0 30px rgba(255, 215, 0, 0.6); border-color: rgba(255, 215, 0, 0.8); }
+        .heat-2 { box-shadow: 0 0 60px rgba(255, 140, 0, 0.8); border-color: rgba(255, 140, 0, 1); }
+        .heat-3 { box-shadow: 0 0 100px rgba(255, 0, 0, 0.9); border-color: rgba(255, 0, 0, 1); animation: shake 0.2s infinite; }
+
+        #status-message { position: absolute; top: -40px; background: rgba(0,0,0,0.75); color: #fff; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap; z-index: 5; font-family: 'Segoe UI', sans-serif; pointer-events: none; }
+        #table-owner { position: absolute; bottom: -25px; color: rgba(255,255,255,0.8); font-weight: bold; font-size: 12px; font-family: 'Segoe UI', sans-serif; pointer-events: none;}
+        #table-hint { position: absolute; bottom: -45px; color: #ffeb3b; font-weight: bold; font-size: 10px; font-family: 'Segoe UI', sans-serif; pointer-events: none; opacity: 0; transition: opacity 0.3s;}
+        
+        .player-area { padding: 10px; display: flex; flex-direction: column; align-items: center; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent); width: 100%; z-index: 10;}
+        .controls { display: flex; gap: 10px; margin-bottom: 10px; font-family: 'Segoe UI', sans-serif; width: 100%; justify-content: center;}
+        .controls button { padding: 12px 25px; font-size: 14px; font-weight: bold; border-radius: 25px; border: 2px solid #fff; cursor: pointer; text-transform: uppercase; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: all 0.1s; }
+        #play-btn { background-color: #2196f3; color: white; }
+        #play-btn:disabled, #pass-btn:disabled { background-color: #555; color: #aaa; border-color: #777; cursor: not-allowed; box-shadow: none; }
+        #pass-btn { background-color: #f44336; color: white; }
+        .controls button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+
+        #combo-text-effect { position: absolute; top: 35%; color: #ffeb3b; font-family: 'Press Start 2P', cursive; font-size: 30px; text-shadow: 5px 5px 0px #000; pointer-events: none; z-index: 200; opacity: 0; text-align: center; width: 100%;}
+        .shockwave-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.5); width: 100px; height: 100px; border: 15px solid #fff; border-radius: 50%; pointer-events: none; opacity: 0; z-index: 150;}
+
+        /* Cartas */
+        .hand { display: flex; justify-content: center; align-items: flex-end; height: 210px; padding: 10px 20px 0 20px; width: 100%; overflow-x: auto; scrollbar-width: none; }
+        .hand::-webkit-scrollbar { display: none; }
+        .card, .played-card { width: 140px; height: 200px; background: linear-gradient(to bottom, #ffffff, #f4f4f4); border-radius: 12px; position: relative; border: 1px solid #cfcfcf; box-shadow: 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9); overflow: hidden; transition: 0.18s ease; flex-shrink: 0; cursor: pointer; user-select: none; }
+        .card::after, .played-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.35), transparent 30%); pointer-events: none; }
+        .suit-filtro { color: #8a3600; } .suit-chinelo { color: #005c29; } .suit-cadeira { color: #b8860b; } .suit-papagaio { color: #c11b1b; } .suit-coringa { color: #111; }    
+        .corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 0.9; font-weight: bold; z-index: 3; }
+        .top-left { top: 7px; left: 9px; } .bottom-right { bottom: 7px; right: 9px; transform: rotate(180deg); }
+        .value { font-size: 28px; } .mini-suit { font-size: 22px; margin-top: 1px; display: flex; justify-content: center; align-items: center; }
+        .center-suit { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; font-size: 82px; opacity: 0.97; }
+        .face { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 92px; height: 120px; border-radius: 8px; background: linear-gradient(to bottom, #f8f2d6, #ead7aa); border: 2px solid rgba(0,0,0,0.12); display: flex; justify-content: center; align-items: center; overflow: hidden; box-shadow: inset 0 0 10px rgba(255,255,255,0.5); }
+        .face::before { content: ""; position: absolute; width: 120%; height: 4px; background: rgba(0,0,0,0.15); transform: rotate(45deg); }
+        .face-art { position: relative; font-size: 62px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); display: flex; justify-content: center; align-items: center; }
+        .ornament { position: absolute; width: 100%; height: 100%; border: 3px solid rgba(0,0,0,0.1); border-radius: 6px; }
+        svg { width: 1em; height: 1em; }
+
+        .hand .card { margin-left: -90px; } .hand .card:first-child { margin-left: 0; }
+        .hand .card.selected { transform: translateY(-25px); outline: 3px solid #ffeb3b; box-shadow: 0 15px 30px rgba(0,0,0,0.5); z-index: 10; }
+        .played-card { position: absolute; margin-left: 0; cursor: default; }
+        .played-card:nth-child(2) { transform: rotate(4deg) translate(8px, -4px); }
+        .played-card:nth-child(3) { transform: rotate(-5deg) translate(-10px, 8px); }
+        .played-card:nth-child(4) { transform: rotate(7deg) translate(14px, 0); }
+
+        /* === MODAIS === */
+        .overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: center; font-family: 'Segoe UI', Arial, sans-serif; color: white; text-align: center; }
+        .box-panel { background: rgba(0, 43, 14, 0.95); backdrop-filter: blur(10px); border: 2px solid #ffeb3b; padding: 25px; border-radius: 12px; width: 95%; max-width: 500px; max-height: 85%; overflow-y: auto; color: white; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
+        .box-panel h2 { text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-bottom: 20px; font-size: 20px;}
+        .rank-list { text-align: left; margin-bottom: 20px; font-size: 14px; }
+        .rank-list li { margin-bottom: 8px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; border-left: 5px solid #ffeb3b; list-style: none; }
+        .history-row { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+        .history-header { font-weight: bold; margin-bottom: 5px; font-size: 12px; color: #ffeb3b; text-align: left;}
+        .history-cards-wrapper { display: flex; height: 80px; align-items: center; margin-top: 5px; }
+        .history-card-scale { transform: scale(0.4); transform-origin: left center; display: flex; }
+        .history-card-scale .card { margin-left: -90px; pointer-events: none; }
+        .history-card-scale .card:first-child { margin-left: 0; }
+
+        /* === RESPONSIVIDADE (MOBILE) === */
+        @media (hover: hover) and (pointer: fine) {
+            .hand .card:hover { transform: translateY(-16px); z-index: 10; }
+            .table-cards-container:hover { background: rgba(255,255,255,0.08); }
+            .table-cards-container:hover #table-hint { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .card, .played-card { width: 85px; height: 121px; border-radius: 8px; }
+            .hand { height: 135px; justify-content: flex-start; } 
+            .hand .card { margin-left: -50px; } .hand .card:first-child { margin-left: auto; } .hand .card:last-child { margin-right: auto; }
+            .hand .card.selected { transform: translateY(-15px); outline-width: 2px; }
+            .corner .value { font-size: 18px; } .corner .mini-suit { font-size: 14px; }
+            .top-left { top: 4px; left: 6px; } .bottom-right { bottom: 4px; right: 6px; }
+            .center-suit { font-size: 45px; } .face { width: 55px; height: 75px; border-width: 1px; } .face-art { font-size: 38px; }
+            .table-cards-container { min-height: 150px; min-width: 110px; border-width: 2px; }
+            .played-card:nth-child(2) { transform: rotate(4deg) translate(5px, -2px); } .played-card:nth-child(3) { transform: rotate(-5deg) translate(-6px, 5px); } .played-card:nth-child(4) { transform: rotate(7deg) translate(8px, 0); }
+            #status-message { font-size: 12px; top: -35px; } #table-owner { font-size: 11px; bottom: -20px; } #table-hint { display: none; } 
+            .history-card-scale { transform: scale(0.5); } .history-cards-wrapper { height: 70px; }
+            #combo-text-effect { font-size: 24px; top: 30%; }
+            .lobby-container { padding: 20px; }
+            
+            /* Ajuste da Princesa no Celular */
+            .jamylle-container { bottom: 10px; right: 10px; }
+            .jamylle-sprite { width: 70px; height: 90px; }
+            body.theme-table .jamylle-container { bottom: 160px; right: -5px; transform: scale(0.7); }
+        }
+    </style>
+</head>
+<body id="game-body" class="theme-lobby">
+
+    <svg class="defs-only" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="icon-chinelo" viewBox="0 0 32 32"><path d="M12,4 C12,0 20,0 20,4 C20,12 24,18 24,24 C24,30 16,32 12,28 Z" fill="#00a8ff"/><path d="M16,10 L10,18 M16,10 L22,18" stroke="#fff" stroke-width="2" fill="none"/></symbol>
+        <symbol id="icon-papagaio" viewBox="0 0 32 32"><path d="M16,4 C20,4 22,8 22,12 C22,20 16,28 12,30 Z" fill="#4cd137"/><path d="M22,8 C26,8 28,12 22,14 Z" fill="#e84118"/><circle cx="20" cy="8" r="1" fill="#000"/><path d="M14,14 C12,18 8,20 6,18 Z" fill="#fbc531"/></symbol>
+        <symbol id="icon-filtro" viewBox="0 0 32 32"><path d="M10,8 Q16,5 22,8 L24,18 Q16,22 8,18 Z" fill="#c04e01"/><path d="M10,8 Q16,11 22,8 L20,4 Q16,2 12,4 Z" fill="#8a3600"/><rect x="14" y="2" width="4" height="2" fill="#555"/></symbol>
+        <symbol id="icon-caramelo" viewBox="0 0 32 32"><rect x="6" y="12" width="20" height="12" fill="#d2691e" rx="4"/><circle cx="12" cy="10" r="4" fill="#d2691e"/><circle cx="10" cy="9" r="1" fill="#000"/><circle cx="14" cy="9" r="1" fill="#000"/></symbol>
+        
+        <symbol id="jamylle-art" viewBox="0 0 64 64">
+            <rect x="18" y="20" width="28" height="30" fill="#f1c40f" rx="4"/>
+            <path d="M22,35 L42,35 L48,60 L16,60 Z" fill="#9b59b6"/>
+            <rect x="28" y="35" width="8" height="25" fill="#8e44ad"/>
+            <rect x="22" y="18" width="20" height="18" fill="#ffeaa7" rx="2"/>
+            <rect x="26" y="24" width="2" height="4" fill="#2c3e50"/>
+            <rect x="36" y="24" width="2" height="4" fill="#2c3e50"/>
+            <rect x="24" y="28" width="3" height="2" fill="#ffb8b8"/>
+            <rect x="37" y="28" width="3" height="2" fill="#ffb8b8"/>
+            <path d="M22,18 L24,10 L32,14 L40,10 L42,18 Z" fill="#f39c12"/>
+            <rect x="20" y="16" width="24" height="4" fill="#f1c40f"/>
+            <rect x="18" y="18" width="4" height="12" fill="#f1c40f"/>
+        </symbol>
+    </svg>
+
+    <div class="jamylle-container">
+        <svg class="jamylle-sprite"><use href="#jamylle-art"></use></svg>
+        <div class="jamylle-name">Princesa Jamylle</div>
+    </div>
+
+    <div id="combo-text-effect">COMBO!</div>
+    <div class="shockwave-ring" id="shockwave"></div>
+
+    <div id="setup-screen">
+        <div id="rain-container"></div>
+        
+        <div class="lobby-container">
+            <div class="title-box">
+                <h1>JAMYLLE'S<br>CASTLE</h1>
+                <p>ONLINE P2P MULTIPLAYER</p>
+            </div>
+
+            <div class="avatar-selection">
+                <button class="avatar-btn" onclick="mudarAvatar(-1)">◀</button>
+                <div class="avatar-display" id="avatar-display">
+                    <svg width="40" height="40"><use href="#icon-chinelo"></use></svg>
+                </div>
+                <button class="avatar-btn" onclick="mudarAvatar(1)">▶</button>
+            </div>
+
+            <div class="input-group">
+                <label for="player-name">SEU NICKNAME</label>
+                <input type="text" id="player-name" placeholder="Ex: MagoSupremo" maxlength="12">
+            </div>
+
+            <div id="p2p-options">
+                <button class="btn-action btn-create" onclick="mostrarPainelHost()">👑 CRIAR SALA (SER HOST)</button>
+                <button class="btn-action btn-join" onclick="mostrarPainelJoin()">⚔️ ENTRAR EM UMA SALA</button>
+            </div>
+
+            <div id="host-panel">
+                <p style="font-family: 'Press Start 2P'; font-size: 8px; color: #fff; margin-bottom: 10px;">CRIE UM NOME PARA A SALA:</p>
+                <div class="input-group">
+                    <input type="text" id="host-code-input" placeholder="Ex: BATALHA26" maxlength="12" style="text-transform: uppercase;">
+                </div>
+                
+                <div class="settings-grid">
+                    <div class="input-group"><label>HUMANOS</label><input type="number" id="num-humans" min="1" max="20" value="1"></div>
+                    <div class="input-group"><label>BOTS (IA)</label><input type="number" id="num-bots" min="0" max="19" value="3"></div>
+                    <div class="input-group"><label>BARALHOS</label><input type="number" id="num-decks" min="1" max="6" value="1"></div>
+                    <div class="checkbox-container">
+                        <label style="font-family: 'Press Start 2P', cursive; font-size: 8px; color: #f1c40f;">CORINGAS</label>
+                        <input type="checkbox" id="use-jokers" checked>
+                    </div>
+                </div>
+                <button class="btn-start" id="btn-create-room" onclick="iniciarSalaRede()" style="margin-bottom: 5px;">1. ABRIR PORTAS (CRIAR)</button>
+                <button class="btn-start" id="btn-start-game" onclick="dispararInicioDeJogo()" disabled style="background: #27ae60;">2. DISTRIBUIR CARTAS (JOGAR)</button>
+                <div id="host-status" class="status-rede"></div>
+            </div>
+
+            <div id="join-panel">
+                <div class="input-group">
+                    <label for="join-code">NOME DA SALA (CRIADO PELO ANFITRIÃO)</label>
+                    <input type="text" id="join-code" placeholder="Ex: BATALHA26" style="text-transform: uppercase;">
+                </div>
+                <button class="btn-start" onclick="conectarAoHost()">▶ CONECTAR E AGUARDAR</button>
+                <div id="guest-status" class="status-rede"></div>
+            </div>
+
+            <button class="btn-discord" onclick="abrirDiscord()">🎧 ABRIR DISCORD (CHAT DE VOZ)</button>
+        </div>
+    </div>
+
+    <div id="draw-screen" class="overlay">
+        <h2 style="font-family: 'Press Start 2P', cursive; color: #ffeb3b; font-size: 16px; line-height: 1.5;" id="draw-text">Sorteando...</h2>
+    </div>
+
+    <div id="turn-overlay" class="overlay">
+        <h2 id="turn-player-name" style="font-size: 24px; color: #ffeb3b; margin-bottom: 20px;">Vez do Jogador</h2>
+        <p style="font-size: 14px; margin-bottom: 30px;">Passe o dispositivo.</p>
+        <button style="padding: 15px 30px; font-size: 16px; cursor: pointer; background: #2196f3; color: white; border: none; border-radius: 5px; font-weight: bold;" onclick="startHumanTurn()">MOSTRAR CARTAS</button>
+    </div>
+
+    <div id="history-modal" class="overlay" onclick="this.style.display='none'">
+        <div class="box-panel" onclick="event.stopPropagation()">
+            <h2>Histórico da Mesa</h2>
+            <div id="history-list"></div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="document.getElementById('history-modal').style.display='none'" style="padding: 10px 25px; background: #f44336; color: white; border: 2px solid white; border-radius: 20px; font-weight: bold; cursor: pointer;">FECHAR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="end-screen" class="overlay">
+        <div class="box-panel">
+            <h2>Fim da Partida!</h2>
+            <ul id="rank-list" class="rank-list"></ul>
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="startRematch()" style="padding: 12px 20px; background: #2e7d32; color: white; border: 2px solid white; border-radius: 20px; font-weight: bold; cursor: pointer; font-size: 14px;">🔄 REVANCHE</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-screen">
+        <div class="opponents-container" id="opponents-container"></div>
+
+        <div class="center-table">
+            <div class="table-cards-container" id="table-card" onclick="showHistory()">
+                <div id="status-message">Distribuindo...</div>
+                <div id="table-owner"></div>
+                <div id="table-hint">👆 Toque para ver histórico</div>
+            </div>
+        </div>
+
+        <div class="player-area">
+            <div class="controls">
+                <button id="play-btn" disabled onclick="playSelected()">JOGAR</button>
+                <button id="pass-btn" disabled onclick="passTurn()">PASSAR</button>
+            </div>
+            <div class="hand" id="player-hand"></div>
+        </div>
+    </div>
+
+    <script>
+        // === VARIÁVEIS DE REDE (PEER JS) ===
+        let myPeer = null;
+        let isHost = false;
+        let guestConnections = []; // Conexões guardadas no celular do Host
+        let connToHost = null;     // Conexão guardada no celular do Convidado
+        let myPlayerName = "";
+
+        // === LÓGICA DE REDE E LOBBY ===
+        const avatares = ['icon-chinelo', 'icon-papagaio', 'icon-filtro', 'icon-caramelo'];
+        let avatarAtual = 0;
+
+        function mudarAvatar(direcao) {
+            avatarAtual += direcao;
+            if (avatarAtual < 0) avatarAtual = avatares.length - 1;
+            if (avatarAtual >= avatares.length) avatarAtual = 0;
+            document.getElementById('avatar-display').innerHTML = `<svg width="40" height="40"><use href="#${avatares[avatarAtual]}"></use></svg>`;
+        }
+
+        function abrirDiscord() {
+            const linkDiscord = "https://discord.gg/seu-codigo-aqui"; 
+            alert("Isso abrirá o app do Discord para conectar na sala de voz. Volte ao jogo após conectar!");
+            window.open(linkDiscord, "_blank");
+        }
+
+        function mostrarPainelHost() {
+            document.getElementById('p2p-options').style.display = 'none';
+            document.getElementById('host-panel').style.display = 'block';
+        }
+
+        function mostrarPainelJoin() {
+            document.getElementById('p2p-options').style.display = 'none';
+            document.getElementById('join-panel').style.display = 'block';
+        }
+
+        // --- FUNÇÕES DO ANFITRIÃO (HOST) ---
+        function iniciarSalaRede() {
+            const roomName = document.getElementById('host-code-input').value.toUpperCase().trim();
+            if(!roomName) { alert("Crie um nome para a sala primeiro!"); return; }
+            
+            myPlayerName = document.getElementById('player-name').value || "Rei do Castelo";
+            document.getElementById('host-status').innerText = "Abrindo portas...";
+            document.getElementById('btn-create-room').disabled = true;
+
+            // Cria o servidor no celular do Anfitrião usando o nome da sala como ID
+            myPeer = new Peer(roomName);
+
+            myPeer.on('open', function(id) {
+                isHost = true;
+                document.getElementById('host-status').innerHTML = `✅ Sala aberta!<br><span style="font-size:12px; color:#fff;">Aguardando amigos...</span>`;
+                document.getElementById('btn-start-game').disabled = false;
+            });
+
+            // Quando um amigo conecta no seu celular
+            myPeer.on('connection', function(conn) {
+                conn.on('open', function() {
+                    guestConnections.push(conn);
+                    document.getElementById('host-status').innerHTML = `👥 Jogadores Conectados: ${guestConnections.length + 1}`;
+                    // Escuta mensagens do amigo
+                    conn.on('data', gerenciarMensagemDeRede);
+                });
+            });
+
+            myPeer.on('error', function(err) {
+                alert("Erro ao criar sala. Talvez esse nome já esteja em uso!");
+                document.getElementById('btn-create-room').disabled = false;
+                document.getElementById('host-status').innerText = "";
+            });
+        }
+
+        function dispararInicioDeJogo() {
+            // O Anfitrião envia um sinal para todos os convidados mudarem de tela
+            guestConnections.forEach(conn => {
+                conn.send({ action: 'irParaMesa' });
+            });
+            // E o próprio Anfitrião também inicia o motor do jogo dele
+            initiateDraw();
+        }
+
+        // --- FUNÇÕES DO CONVIDADO (GUEST) ---
+        function conectarAoHost() {
+            const roomName = document.getElementById('join-code').value.toUpperCase().trim();
+            if(!roomName) { alert("Digite o nome da sala para entrar!"); return; }
+
+            myPlayerName = document.getElementById('player-name').value || "Convidado";
+            document.getElementById('guest-status').innerText = "Procurando castelo...";
+
+            // Convidados não precisam de ID fixo
+            myPeer = new Peer();
+            
+            myPeer.on('open', function(id) {
+                isHost = false;
+                // Tenta conectar ao ID do Anfitrião
+                connToHost = myPeer.connect(roomName);
+                
+                connToHost.on('open', function() {
+                    document.getElementById('guest-status').innerHTML = `✅ Conectado com sucesso!<br><span style="font-size:12px; color:#fff;">Aguardando o anfitrião distribuir as cartas...</span>`;
+                    // Escuta comandos do Anfitrião
+                    connToHost.on('data', gerenciarMensagemDeRede);
+                });
+
+                connToHost.on('error', function(err) { alert("A conexão com o Anfitrião falhou."); });
+            });
+
+            myPeer.on('error', function(err) { alert("Erro de rede. Verifique o nome da sala."); });
+        }
+
+        // --- GERENCIADOR DE MENSAGENS INVISÍVEIS ---
+        function gerenciarMensagemDeRede(dados) {
+            // Se o Anfitrião mandou o comando 'irParaMesa', o celular do convidado obedece
+            if(dados.action === 'irParaMesa') {
+                document.getElementById('setup-screen').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'flex';
+                document.body.className = 'theme-table';
+                document.getElementById('status-message').innerText = "Aguardando o baralho...";
+            }
+            // (Na próxima fase, colocaremos aqui a lógica de receber as cartas!)
+        }
+
+        // === EFEITOS VISUAIS DO LOBBY ===
+        function criarChuvaDeChinelos() {
+            const rainContainer = document.getElementById('rain-container');
+            for (let i = 0; i < 30; i++) {
+                let chinelo = document.createElement('div'); chinelo.className = 'chinelo-rain';
+                let startLeft = Math.random() * 150 - 50; let animationDuration = Math.random() * 8 + 4; 
+                let animationDelay = Math.random() * 10; let scale = Math.random() * 0.5 + 0.3; let opacity = Math.random() * 0.4 + 0.1; 
+                chinelo.innerHTML = `<svg width="40" height="40" style="transform: scale(${scale})"><use href="#icon-chinelo"></use></svg>`;
+                chinelo.style.left = `${startLeft}vw`; chinelo.style.animationDuration = `${animationDuration}s`;
+                chinelo.style.animationDelay = `${animationDelay}s`; chinelo.style.opacity = opacity;
+                rainContainer.appendChild(chinelo);
+            }
+        }
+        window.onload = criarChuvaDeChinelos;
+
+
+        // =====================================================================
+        // === LÓGICA DO JOGO DE CARTAS (PRESIDENTE) MANTIDA E PROTEGIDA ===
+        // =====================================================================
+        
+        const svgFiltro = `<svg viewBox="0 0 32 32"><path d="M10,8 Q16,5 22,8 L24,18 Q16,22 8,18 Z" fill="#c04e01"/><path d="M10,8 Q16,11 22,8 L20,4 Q16,2 12,4 Z" fill="#8a3600"/><rect x="14" y="2" width="4" height="2" fill="#555"/></svg>`;
+        const svgChinelo = `<svg viewBox="0 0 32 32"><path d="M12,4 C12,0 20,0 20,4 C20,12 24,18 24,24 C24,30 16,32 12,28 Z" fill="#00a8ff"/><path d="M16,10 L10,18 M16,10 L22,18" stroke="#fff" stroke-width="2" fill="none"/><circle cx="16" cy="10" r="1.5" fill="#fff"/><circle cx="10" cy="18" r="1.5" fill="#fff"/><circle cx="22" cy="18" r="1.5" fill="#fff"/></svg>`;
+        const svgCadeira = `<svg viewBox="0 0 32 32"><path d="M10,4 L22,4 L20,16 L12,16 Z" fill="#fbc531"/><rect x="10" y="16" width="12" height="2" fill="#e1b12c"/><rect x="11" y="18" width="2" height="10" fill="#fbc531"/><rect x="19" y="18" width="2" height="10" fill="#fbc531"/></svg>`;
+        const svgPapagaio = `<svg viewBox="0 0 32 32"><path d="M16,4 C20,4 22,8 22,12 C22,20 16,28 12,30 Z" fill="#4cd137"/><path d="M22,8 C26,8 28,12 22,14 Z" fill="#e84118"/><circle cx="20" cy="8" r="1" fill="#000"/><path d="M14,14 C12,18 8,20 6,18 Z" fill="#fbc531"/></svg>`;
+        const svgCaramelo = `<svg viewBox="0 0 32 32"><rect x="6" y="12" width="20" height="12" fill="#d2691e" rx="4"/><circle cx="12" cy="10" r="4" fill="#d2691e"/><circle cx="10" cy="9" r="1" fill="#000"/><circle cx="14" cy="9" r="1" fill="#000"/></svg>`;
+        const svgJoaoBarro = `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="10" fill="#8b5a2b"/><circle cx="12" cy="18" r="3" fill="#000"/><path d="M6,16 Q16,6 26,16" stroke="#5c3a21" stroke-width="2" fill="none"/></svg>`;
+
+        const brSuits = [{ id: 'filtro', svg: svgFiltro }, { id: 'chinelo', svg: svgChinelo }, { id: 'cadeira', svg: svgCadeira }, { id: 'papagaio', svg: svgPapagaio }];
+        const values = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'];
+        
+        let numHumans, numBots, totalPlayers, numDecks, useJokers;
+        let deck = [], players = [], playerTypes = []; 
+        let tableCombo = null, tableOwner = -1, currentPlayer = 0;
+        let passedPlayers = [], selectedIndices = [], tableHistory = [];
+        let gameActive = false, finishedPlayers = [];
+
+        function initiateDraw() {
+            numHumans = parseInt(document.getElementById('num-humans').value) || 1;
+            numBots = parseInt(document.getElementById('num-bots').value) || 0;
+            totalPlayers = numHumans + numBots;
+            if (totalPlayers < 3) { alert("Mínimo de 3 jogadores na mesa!"); return; }
+
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('draw-screen').style.display = 'flex';
+            
+            playerTypes = [];
+            for(let i=0; i<numHumans; i++) playerTypes.push('human');
+            for(let i=0; i<numBots; i++) playerTypes.push('bot');
+
+            let spins = 0;
+            let drawInterval = setInterval(() => {
+                let random = Math.floor(Math.random() * totalPlayers);
+                document.getElementById('draw-text').innerText = `Sorteando...\n\n${getPlayerName(random)}`;
+                spins++;
+                if (spins > 20) {
+                    clearInterval(drawInterval);
+                    currentPlayer = random;
+                    document.getElementById('draw-text').innerText = `🏆 SORTEADO! 🏆\n\n${getPlayerName(currentPlayer)} COMEÇA!`;
+                    setTimeout(startGame, 2000);
+                }
+            }, 100);
+        }
+
+        function startGame() {
+            numDecks = parseInt(document.getElementById('num-decks').value) || 1;
+            useJokers = document.getElementById('use-jokers').checked;
+            players = Array.from({length: totalPlayers}, () => []);
+            passedPlayers = new Array(totalPlayers).fill(false);
+            finishedPlayers = []; tableHistory = []; tableCombo = null; tableOwner = -1;
+            
+            document.getElementById('draw-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            
+            document.body.className = 'theme-table';
+            gameActive = true;
+
+            buildOpponentsUI(); buildDeck(); shuffleDeck(); dealCards(); sortHands();
+            updateOpponentUI(); updateTableUI("Partida Iniciada!");
+            
+            setTimeout(processTurn, 1000);
+        }
+
+        function getRankName(finishIndex) {
+            if (finishIndex === 0) return "Presidente";
+            if (finishIndex === 1) return "Vice";
+            if (finishIndex === totalPlayers - 1) return "Mendigo";
+            if (finishIndex === totalPlayers - 2 && totalPlayers >= 4) return "Vice-Men.";
+            return "Neutro";
+        }
+
+        function buildOpponentsUI() {
+            const container = document.getElementById('opponents-container');
+            container.innerHTML = '';
+            for (let i = 0; i < totalPlayers; i++) {
+                let div = document.createElement('div'); div.className = 'opponent-box'; div.id = `player-box-${i}`;
+                div.innerHTML = `${getPlayerName(i)} <br><span id="card-count-${i}" style="font-weight:normal;"></span> <div class="rank-badge" id="rank-badge-${i}"></div>`;
+                container.appendChild(div);
+            }
+        }
+
+        function buildDeck() {
+            deck = [];
+            for (let d = 0; d < numDecks; d++) {
+                for (let i = 0; i < values.length; i++) {
+                    for (let j = 0; j < brSuits.length; j++) deck.push({ valueStr: values[i], suitId: brSuits[j].id, power: i, svg: brSuits[j].svg });
+                }
+                if (useJokers) {
+                    deck.push({ valueStr: '★', suitId: 'coringa', power: 13, svg: svgCaramelo });
+                    deck.push({ valueStr: '★', suitId: 'coringa', power: 13, svg: svgJoaoBarro });
+                }
+            }
+        }
+
+        function shuffleDeck() { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
+        function dealCards() { let p = 0; while (deck.length > 0) { players[p].push(deck.pop()); p = (p + 1) % totalPlayers; } }
+        function sortHands() { for (let i = 0; i < totalPlayers; i++) players[i].sort((a, b) => a.power - b.power); }
+
+        function getPlayerName(index) {
+            if (index === -1) return "";
+            return playerTypes[index] === 'human' ? `JOG ${index+1}` : `BOT ${index+1}`;
+        }
+
+        function updateOpponentUI() {
+            for (let i = 0; i < totalPlayers; i++) {
+                let box = document.getElementById(`player-box-${i}`);
+                if (!box) continue;
+                document.getElementById(`card-count-${i}`).innerText = `${players[i].length} cartas`;
+                box.className = `opponent-box ${currentPlayer === i ? 'active' : ''}`;
+                if (finishedPlayers.includes(i)) {
+                    box.classList.add('finished');
+                    let rankBadge = document.getElementById(`rank-badge-${i}`);
+                    rankBadge.innerText = getRankName(finishedPlayers.indexOf(i));
+                } else if (passedPlayers[i]) { box.style.opacity = '0.4'; } else { box.style.opacity = '1'; }
+            }
+        }
+
+        function generateCardHTML(card) {
+            let isFaceCard = ['J', 'Q', 'K', '★'].includes(card.valueStr);
+            let centerContent = isFaceCard ? `<div class="face"><div class="ornament"></div><div class="face-art">${card.svg}</div></div>` : `<div class="center-suit">${card.svg}</div>`;
+            return `<div class="corner top-left"><div class="value">${card.valueStr}</div><div class="mini-suit">${card.svg}</div></div>${centerContent}<div class="corner bottom-right"><div class="value">${card.valueStr}</div><div class="mini-suit">${card.svg}</div></div>`;
+        }
+
+        function triggerComboFX(count, power) {
+            const table = document.getElementById('table-card');
+            const comboText = document.getElementById('combo-text-effect');
+            const shockwave = document.getElementById('shockwave');
+
+            table.className = 'table-cards-container';
+            document.body.classList.remove('bg-heat-1', 'bg-heat-2', 'bg-heat-3', 'ultimate-active');
+            
+            if (power >= 13) { table.classList.add('heat-3'); document.body.classList.add('bg-heat-3'); }
+            else if (power >= 11) { table.classList.add('heat-2'); document.body.classList.add('bg-heat-2'); }
+            else if (power >= 8) { table.classList.add('heat-1'); document.body.classList.add('bg-heat-1'); }
+
+            if (count === 3) {
+                comboText.innerText = "COMBO!"; comboText.style.animation = 'comboText 0.8s forwards';
+                table.classList.add('shake-once');
+                setTimeout(() => { comboText.style.animation = ''; table.classList.remove('shake-once'); }, 800);
+            } else if (count >= 4) {
+                comboText.innerText = "ULTIMATE!"; comboText.style.animation = 'comboText 1s forwards';
+                document.body.classList.add('ultimate-active', 'shake-once'); shockwave.style.animation = 'shockwave 0.6s forwards';
+                setTimeout(() => { document.body.classList.remove('ultimate-active', 'shake-once'); shockwave.style.animation = ''; }, 1000);
+            }
+        }
+
+        function clearTableWithAnimation() {
+            const playedCards = document.querySelectorAll('.played-card');
+            playedCards.forEach(card => card.classList.add('sweep-animation'));
+            document.getElementById('table-card').className = 'table-cards-container';
+            document.body.className = 'theme-table'; 
+            
+            setTimeout(() => {
+                tableCombo = null; tableHistory = []; passedPlayers.fill(false);
+                if (finishedPlayers.includes(tableOwner)) {
+                    let next = (tableOwner + 1) % totalPlayers;
+                    while (finishedPlayers.includes(next)) next = (next + 1) % totalPlayers;
+                    currentPlayer = next;
+                } else { currentPlayer = tableOwner; }
+                updateTableUI("MESA LIMPA! NOVA RODADA.");
+                updateOpponentUI();
+                setTimeout(processTurn, 1000); 
+            }, 500);
+        }
+
+        function updateTableUI(msgOverride = null) {
+            const tableDiv = document.getElementById('table-card');
+            const msgDiv = document.getElementById('status-message');
+            const ownerDiv = document.getElementById('table-owner');
+            tableDiv.querySelectorAll('.played-card').forEach(e => e.remove());
+
+            if (tableCombo) {
+                tableCombo.cards.forEach((card, idx) => {
+                    let cardEl = document.createElement('div');
+                    cardEl.className = `played-card suit-${card.suitId} drop-animation`;
+                    cardEl.style.zIndex = idx;
+                    cardEl.innerHTML = generateCardHTML(card);
+                    tableDiv.appendChild(cardEl);
+                });
+                let requiredValue = tableCombo.cards[0].valueStr;
+                let plural = tableCombo.count > 1 ? "cartas maiores" : "carta maior";
+                msgDiv.innerText = msgOverride || `Apenas ${tableCombo.count} ${plural} que ${requiredValue}`;
+                ownerDiv.innerText = `Líder: ${getPlayerName(tableOwner)}`;
+            } else {
+                msgDiv.innerText = msgOverride || "MESA LIVRE - JOGUE ALGO";
+                ownerDiv.innerText = "";
+            }
+        }
+
+        function showHistory() {
+            if (tableHistory.length === 0) return;
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            [...tableHistory].reverse().forEach((record, index) => {
+                let row = document.createElement('div'); row.className = 'history-row';
+                let header = document.createElement('div'); header.className = 'history-header';
+                header.innerText = (index === 0 ? "Última Jogada: " : "Coberto: ") + getPlayerName(record.playerIndex);
+                let wrapper = document.createElement('div'); wrapper.className = 'history-cards-wrapper';
+                let scaleDiv = document.createElement('div'); scaleDiv.className = 'history-card-scale';
+                record.cards.forEach(card => {
+                    let cardEl = document.createElement('div'); cardEl.className = `card suit-${card.suitId}`;
+                    cardEl.innerHTML = generateCardHTML(card); scaleDiv.appendChild(cardEl);
+                });
+                wrapper.appendChild(scaleDiv); row.appendChild(header); row.appendChild(wrapper); list.appendChild(row);
+            });
+            document.getElementById('history-modal').style.display = 'flex';
+        }
+
+        function processTurn() {
+            if (!gameActive) return;
+            if (finishedPlayers.length >= totalPlayers - 1) {
+                for (let i = 0; i < totalPlayers; i++) if (!finishedPlayers.includes(i)) finishedPlayers.push(i);
+                gameActive = false; showEndScreen(); return;
+            }
+
+            let activeCount = 0;
+            for (let i = 0; i < totalPlayers; i++) if (!finishedPlayers.includes(i) && !passedPlayers[i]) activeCount++;
+            if (activeCount === 0 || (activeCount === 1 && tableCombo !== null && !passedPlayers[tableOwner])) {
+                setTimeout(clearTableWithAnimation, 600); return;
+            }
+
+            if (passedPlayers[currentPlayer] || finishedPlayers.includes(currentPlayer)) {
+                currentPlayer = (currentPlayer + 1) % totalPlayers; processTurn(); return;
+            }
+
+            updateOpponentUI(); selectedIndices = [];
+            if (playerTypes[currentPlayer] === 'human') {
+                if (numHumans > 1) {
+                    document.getElementById('turn-player-name').innerText = `Vez do ${getPlayerName(currentPlayer)}`;
+                    document.getElementById('turn-overlay').style.display = 'flex';
+                    document.getElementById('player-hand').innerHTML = ''; 
+                } else { startHumanTurn(); }
+            } else {
+                document.getElementById('status-message').innerText = `${getPlayerName(currentPlayer)} pensando...`;
+                document.getElementById('play-btn').disabled = true; document.getElementById('pass-btn').disabled = true;
+                setTimeout(botLogic, 1200); 
+            }
+        }
+
+        function startHumanTurn() {
+            document.getElementById('turn-overlay').style.display = 'none';
+            if (tableCombo) {
+                let requiredValue = tableCombo.cards[0].valueStr;
+                let plural = tableCombo.count > 1 ? "cartas maiores" : "carta maior";
+                document.getElementById('status-message').innerText = `Sua vez: Jogue ${tableCombo.count} ${plural} que ${requiredValue}`;
+            } else {
+                document.getElementById('status-message').innerText = `Sua vez! Mesa livre.`;
+            }
+            document.getElementById('pass-btn').disabled = false;
+            renderHand(); validateSelection();
+        }
+
+        function renderHand() {
+            const handDiv = document.getElementById('player-hand');
+            handDiv.innerHTML = '';
+            if (playerTypes[currentPlayer] !== 'human') return;
+
+            players[currentPlayer].forEach((card, index) => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = `card suit-${card.suitId}`;
+                cardDiv.id = `hand-card-${index}`;
+                cardDiv.onclick = () => toggleSelection(index);
+                cardDiv.innerHTML = generateCardHTML(card);
+                handDiv.appendChild(cardDiv);
+            });
+        }
+
+        function toggleSelection(index) {
+            const pos = selectedIndices.indexOf(index);
+            const cardEl = document.getElementById(`hand-card-${index}`);
+            if (pos > -1) { selectedIndices.splice(pos, 1); if(cardEl) cardEl.classList.remove('selected'); }
+            else { selectedIndices.push(index); if(cardEl) cardEl.classList.add('selected'); }
+            validateSelection();
+        }
+
+        function validateSelection() {
+            const playBtn = document.getElementById('play-btn');
+            if (selectedIndices.length === 0) { playBtn.disabled = true; return; }
+            let firstPower = players[currentPlayer][selectedIndices[0]].power;
+            let allSame = selectedIndices.every(i => players[currentPlayer][i].power === firstPower);
+            if (!allSame) { playBtn.disabled = true; return; }
+
+            if (tableCombo) {
+                let numPower = Number(firstPower);
+                let tablePower = Number(tableCombo.power);
+                playBtn.disabled = !(selectedIndices.length === tableCombo.count && numPower > tablePower);
+            } else { playBtn.disabled = false; }
+        }
+
+        function finalizePlay(playedCards, indices) {
+            tableCombo = { power: Number(playedCards[0].power), count: playedCards.length, cards: playedCards };
+            tableOwner = currentPlayer;
+            tableHistory.push({ playerIndex: currentPlayer, cards: [...playedCards] });
+
+            indices.sort((a,b) => b - a).forEach(i => players[currentPlayer].splice(i, 1));
+            passedPlayers.fill(false); 
+            
+            if (players[currentPlayer].length === 0 && !finishedPlayers.includes(currentPlayer)) { finishedPlayers.push(currentPlayer); }
+            
+            triggerComboFX(playedCards.length, playedCards[0].power);
+            updateTableUI(); selectedIndices = []; currentPlayer = (currentPlayer + 1) % totalPlayers;
+            document.getElementById('player-hand').innerHTML = ''; 
+            document.getElementById('play-btn').disabled = true; document.getElementById('pass-btn').disabled = true;
+            setTimeout(processTurn, 800);
+        }
+
+        function playSelected() { let playedCards = selectedIndices.map(i => players[currentPlayer][i]); finalizePlay(playedCards, selectedIndices); }
+
+        function botLogic() {
+            let hand = players[currentPlayer];
+            let groups = {};
+            hand.forEach((card, i) => { let p = Number(card.power); if(!groups[p]) groups[p] = []; groups[p].push(i); });
+            let played = false;
+
+            if (!tableCombo) {
+                let lowestPower = Math.min(...Object.keys(groups).map(Number));
+                let indicesToPlay = groups[lowestPower]; 
+                let playedCards = indicesToPlay.map(i => players[currentPlayer][i]);
+                finalizePlay(playedCards, indicesToPlay); played = true;
+            } else {
+                let tablePower = Number(tableCombo.power);
+                let powersAscending = Object.keys(groups).map(Number).sort((a,b) => a - b);
+                for (let p of powersAscending) {
+                    if (p > tablePower && groups[p].length >= tableCombo.count) {
+                        let indicesToPlay = groups[p].slice(0, tableCombo.count);
+                        let playedCards = indicesToPlay.map(i => players[currentPlayer][i]);
+                        finalizePlay(playedCards, indicesToPlay); played = true; break;
+                    }
+                }
+            }
+
+            if (!played) {
+                passedPlayers[currentPlayer] = true; updateTableUI(); selectedIndices = [];
+                currentPlayer = (currentPlayer + 1) % totalPlayers; document.getElementById('player-hand').innerHTML = ''; 
+                setTimeout(processTurn, 800);
+            }
+        }
+
+        function passTurn() {
+            passedPlayers[currentPlayer] = true; updateTableUI(); selectedIndices = [];
+            currentPlayer = (currentPlayer + 1) % totalPlayers; document.getElementById('player-hand').innerHTML = ''; 
+            document.getElementById('play-btn').disabled = true; document.getElementById('pass-btn').disabled = true;
+            setTimeout(processTurn, 500);
+        }
+
+        function showEndScreen() {
+            updateOpponentUI();
+            const list = document.getElementById('rank-list');
+            list.innerHTML = '';
+            finishedPlayers.forEach((playerIdx, rankPos) => {
+                let li = document.createElement('li'); let rankStr = getRankName(rankPos);
+                li.innerHTML = `<strong>${rankPos + 1}º - ${rankStr}:</strong> ${getPlayerName(playerIdx)}`;
+                if (rankPos === 0) li.style.borderLeftColor = "#ffeb3b";
+                if (rankPos === totalPlayers - 1) li.style.borderLeftColor = "#f44336";
+                list.appendChild(li);
+            });
+            document.getElementById('end-screen').style.display = 'flex';
+        }
+
+        function startRematch() {
+            buildDeck(); shuffleDeck(); players = Array.from({length: totalPlayers}, () => []); dealCards(); sortHands();
+            let pres = finishedPlayers[0]; let scum = finishedPlayers[finishedPlayers.length - 1];
+            
+            let scumBest = players[scum].pop(); let presWorst = players[pres].shift(); 
+            players[pres].push(scumBest); players[scum].push(presWorst);
+            
+            if (totalPlayers >= 4) {
+                let vice = finishedPlayers[1]; let pen = finishedPlayers[finishedPlayers.length - 2];
+                let penBest = players[pen].pop(); let viceWorst = players[vice].shift();
+                players[vice].push(penBest); players[pen].push(viceWorst);
+            }
+            sortHands(); currentPlayer = scum; finishedPlayers = []; passedPlayers.fill(false);
+            tableCombo = null; tableHistory = []; tableOwner = -1;
+            document.getElementById('end-screen').style.display = 'none'; gameActive = true;
+            
+            updateOpponentUI(); document.getElementById('table-card').className = 'table-cards-container'; document.body.className = 'theme-table';
+            updateTableUI("Troca Concluída! Mendigo Começa.");
+            setTimeout(processTurn, 1500);
+        }
+    </script>
+</body>
+</html>

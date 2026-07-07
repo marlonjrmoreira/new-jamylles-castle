@@ -1,0 +1,703 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#000;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    overflow:hidden;
+    font-family:Arial;
+}
+
+.scene{
+    position:relative;
+    width:min(95vw,430px);
+    aspect-ratio:43/76;
+    height:auto;
+    overflow:hidden;
+    border:4px solid #000;
+    image-rendering:pixelated;
+    box-shadow:
+    0 0 50px rgba(130,0,255,.55),
+    0 0 100px rgba(100,0,255,.25);
+    background:#120028;
+}
+
+.poster{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    z-index:1;
+}
+
+/* NUVENS */
+.cloud{
+    position:absolute;
+    width:220px;
+    height:60px;
+    background:rgba(255,255,255,.08);
+    border-radius:50px;
+    filter:blur(10px);
+    z-index:2;
+}
+
+.cloud::before,
+.cloud::after{
+    content:"";
+    position:absolute;
+    background:rgba(255,255,255,.08);
+    border-radius:50%;
+}
+
+.cloud::before{
+    width:90px;
+    height:90px;
+    top:-20px;
+    left:25px;
+}
+
+.cloud::after{
+    width:120px;
+    height:120px;
+    top:-45px;
+    right:20px;
+}
+
+.cloud1{
+    top:170px;
+    left:-320px;
+    animation:cloudMove 28s linear infinite;
+}
+
+.cloud2{
+    top:240px;
+    left:-420px;
+    transform:scale(.8);
+    animation:cloudMove 45s linear infinite;
+    animation-delay:-12s;
+}
+
+@keyframes cloudMove{
+    from{
+        transform:translateX(0);
+    }
+    to{
+        transform:translateX(1000px);
+    }
+}
+
+/* FOCO CINEMATOGRÁFICO PRINCESA */
+.princessFocus{
+    position:absolute;
+    width:260px;
+    height:340px;
+    top:270px;
+    left:90px;
+    z-index:3;
+
+    background:
+    radial-gradient(circle,
+    rgba(255,220,140,.20) 0%,
+    rgba(255,180,80,.10) 40%,
+    transparent 75%);
+
+    filter:blur(12px);
+
+    animation:focusPulse 3s ease-in-out infinite;
+    mix-blend-mode:screen;
+}
+
+@keyframes focusPulse{
+
+    0%,100%{
+        opacity:.55;
+        transform:scale(1);
+    }
+
+    50%{
+        opacity:1;
+        transform:scale(1.05);
+    }
+
+}
+
+/* BRILHO ROSTO */
+.faceGlow{
+    position:absolute;
+    width:120px;
+    height:120px;
+    border-radius:50%;
+    top:305px;
+    left:154px;
+    background:radial-gradient(circle,
+    rgba(255,180,220,.30),
+    rgba(255,140,220,.15),
+    transparent 70%);
+    z-index:4;
+    animation:pulse 2s ease-in-out infinite;
+    mix-blend-mode:screen;
+}
+
+@keyframes pulse{
+    0%,100%{
+        opacity:.4;
+        transform:scale(1);
+    }
+
+    50%{
+        opacity:1;
+        transform:scale(1.08);
+    }
+}
+
+/* CABELO */
+.hairLight{
+    position:absolute;
+    width:180px;
+    height:120px;
+    top:320px;
+    right:60px;
+    z-index:3;
+
+    background:
+    radial-gradient(circle at 30% 50%,
+    rgba(255,230,120,.28),
+    transparent 60%),
+
+    radial-gradient(circle at 75% 50%,
+    rgba(255,180,40,.20),
+    transparent 60%);
+
+    filter:blur(9px);
+
+    animation:hairMove 3s ease-in-out infinite;
+    transform-origin:left center;
+}
+
+@keyframes hairMove{
+
+    0%{
+        transform:
+        rotate(0deg)
+        translateX(0px);
+    }
+
+    50%{
+        transform:
+        rotate(2deg)
+        translateX(7px);
+    }
+
+    100%{
+        transform:
+        rotate(0deg)
+        translateX(0px);
+    }
+
+}
+
+/* CARTAS */
+.cardsMove{
+    position:absolute;
+    width:130px;
+    height:90px;
+    top:410px;
+    left:210px;
+    z-index:4;
+
+    animation:cardsFloat 2.5s ease-in-out infinite;
+}
+
+@keyframes cardsFloat{
+
+    0%{
+        transform:
+        rotate(0deg)
+        translateY(0px);
+    }
+
+    50%{
+        transform:
+        rotate(2deg)
+        translateY(-5px);
+    }
+
+    100%{
+        transform:
+        rotate(0deg)
+        translateY(0px);
+    }
+
+}
+
+/* ESTRELAS */
+.star{
+    position:absolute;
+    width:4px;
+    height:4px;
+    background:#fff;
+    border-radius:50%;
+    z-index:5;
+    animation:twinkle 2s infinite;
+}
+
+@keyframes twinkle{
+
+    0%,100%{
+        opacity:.2;
+        transform:scale(1);
+    }
+
+    50%{
+        opacity:1;
+        transform:scale(2.3);
+    }
+
+}
+
+/* CRT */
+.scanlines{
+    position:absolute;
+    inset:0;
+    z-index:10;
+    pointer-events:none;
+
+    background:
+    repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,.03) 0px,
+        rgba(255,255,255,.03) 1px,
+        transparent 2px,
+        transparent 4px
+    );
+
+    mix-blend-mode:overlay;
+    opacity:.5;
+}
+
+.vignette{
+    position:absolute;
+    inset:0;
+    z-index:11;
+    pointer-events:none;
+
+    background:radial-gradient(circle,
+    transparent 55%,
+    rgba(0,0,0,.45) 100%);
+}
+
+.logoGlow{
+    position:absolute;
+    width:320px;
+    height:120px;
+    top:100px;
+    left:55px;
+    z-index:2;
+
+    background:radial-gradient(circle,
+    rgba(255,180,40,.18),
+    transparent 70%);
+
+    filter:blur(15px);
+    animation:logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoPulse{
+    0%,100%{
+        opacity:.5;
+        transform:scale(1);
+    }
+
+    50%{
+        opacity:1;
+        transform:scale(1.04);
+    }
+}
+
+/* MENU PRINCIPAL */
+.menuOverlay{
+    position:absolute;
+    inset:0;
+    z-index:20;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    align-items:center;
+    padding:0 24px 54px;
+    gap:14px;
+    pointer-events:auto;
+}
+.gameTitle{
+    position:absolute;
+    top:74px;
+    left:0;
+    right:0;
+    text-align:center;
+    font-family:Georgia, 'Times New Roman', serif;
+    font-size:42px;
+    letter-spacing:4px;
+    color:#ffe7a8;
+    text-shadow:0 0 12px rgba(255,190,70,.8), 0 4px 0 rgba(30,0,60,.85);
+}
+.menuButton{
+    width:min(100%,280px);
+    min-height:46px;
+    border:1px solid rgba(255,221,148,.7);
+    border-radius:999px;
+    color:#fff3c7;
+    background:linear-gradient(180deg, rgba(83,24,130,.82), rgba(30,5,65,.92));
+    box-shadow:0 0 20px rgba(128,68,255,.35), inset 0 0 14px rgba(255,235,150,.13);
+    text-transform:uppercase;
+    font-weight:700;
+    letter-spacing:1px;
+    cursor:pointer;
+    transition:transform .18s ease, filter .18s ease, box-shadow .18s ease;
+}
+.menuButton:hover,
+.menuButton:focus-visible{
+    transform:translateY(-2px) scale(1.02);
+    filter:brightness(1.1);
+    box-shadow:0 0 28px rgba(255,200,90,.35), inset 0 0 14px rgba(255,235,150,.18);
+}
+.menuButton.secondary{
+    opacity:.88;
+}
+.versionTag{
+    color:rgba(255,255,255,.55);
+    font-size:12px;
+}
+.screen{
+    min-height:100dvh;
+    display:none;
+    place-items:center;
+}
+.screen.active{
+    display:grid;
+}
+.screen.fadeOut{
+    animation:screenFadeOut .65s ease forwards;
+}
+@keyframes screenFadeOut{
+    to{ opacity:0; transform:scale(1.04); filter:blur(6px); }
+}
+@media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
+}
+
+/* v0.0.3 — Configuração de sala */
+.setupPanel{
+    width:min(100%,310px);
+    padding:12px;
+    border:1px solid rgba(255,231,168,.25);
+    border-radius:16px;
+    background:rgba(7,1,19,.72);
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    backdrop-filter:blur(8px);
+}
+.setupPanel label{
+    color:rgba(255,247,223,.78);
+    font-size:10px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+}
+.setupPanel input,
+.setupPanel select{
+    min-height:30px;
+    border:1px solid rgba(255,231,168,.35);
+    border-radius:10px;
+    background:rgba(0,0,0,.45);
+    color:#fff7df;
+    padding:0 8px;
+    outline:none;
+}
+.setupPanel .inlineOption{
+    flex-direction:row;
+    align-items:center;
+    justify-content:flex-start;
+    text-transform:none;
+}
+.setupPanel .inlineOption input{min-height:auto;}
+
+.menuSubtitle{
+    margin-top:-6px;
+    margin-bottom:10px;
+    font-size:12px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:rgba(255,247,223,.8);
+}
+.setupGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+}
+.setupPanel select{
+    width:100%;
+    border:1px solid rgba(255,231,168,.28);
+    border-radius:10px;
+    background:rgba(0,0,0,.54);
+    color:var(--text);
+    padding:9px 10px;
+}
+
+/* === v0.1.1 — Tela inicial mais legível + melhor uso em mobile === */
+#menuScreen{
+    padding:0;
+    background:#05010b;
+}
+
+#menuScreen .scene{
+    width:min(100vw, 520px);
+    height:100dvh;
+    max-height:920px;
+    aspect-ratio:auto;
+    border:0;
+    border-radius:0;
+    box-shadow:0 0 80px rgba(130,0,255,.42);
+}
+
+#menuScreen .poster{
+    opacity:1;
+    filter:brightness(1.12) saturate(1.08) contrast(1.02);
+    object-fit:cover;
+    object-position:center center;
+}
+
+#menuScreen .scanlines{
+    opacity:.24;
+}
+
+#menuScreen .vignette{
+    background:
+        linear-gradient(to bottom,
+            rgba(0,0,0,.06) 0%,
+            rgba(0,0,0,.02) 32%,
+            rgba(0,0,0,.20) 58%,
+            rgba(0,0,0,.64) 100%),
+        radial-gradient(circle, transparent 58%, rgba(0,0,0,.28) 100%);
+}
+
+#menuScreen .menuOverlay{
+    inset:0;
+    justify-content:flex-end;
+    padding:clamp(14px, 3dvh, 30px) 16px calc(14px + env(safe-area-inset-bottom));
+    gap:8px;
+}
+
+#menuScreen .gameTitle{
+    top:clamp(20px, 5dvh, 54px);
+    font-size:clamp(30px, 8vw, 46px);
+    line-height:1;
+    color:#fff1bf;
+    text-shadow:0 0 18px rgba(255,200,70,.88), 0 4px 0 rgba(30,0,60,.92);
+}
+
+#menuScreen .menuSubtitle{
+    margin:0 0 2px;
+    padding:4px 10px;
+    border:1px solid rgba(255,231,168,.2);
+    border-radius:999px;
+    background:rgba(0,0,0,.26);
+    backdrop-filter:blur(4px);
+    font-size:11px;
+}
+
+#menuScreen .setupPanel{
+    width:min(100%, 390px);
+    max-height:min(39dvh, 320px);
+    overflow:auto;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:8px;
+    padding:10px;
+    border-color:rgba(255,231,168,.38);
+    background:rgba(7,1,19,.54);
+    box-shadow:0 16px 42px rgba(0,0,0,.36), inset 0 0 18px rgba(255,231,168,.06);
+    scrollbar-width:thin;
+}
+
+#menuScreen .setupPanel label{
+    font-size:9px;
+    line-height:1.25;
+}
+
+#menuScreen .setupPanel input,
+#menuScreen .setupPanel select{
+    min-height:34px;
+    font-size:13px;
+    background:rgba(0,0,0,.52);
+}
+
+#menuScreen .setupPanel > label:nth-child(3),
+#menuScreen .setupPanel > label:last-child{
+    grid-column:1 / -1;
+}
+
+#menuScreen .setupPanel .inlineOption{
+    min-height:34px;
+    padding:7px 8px;
+    border:1px solid rgba(255,231,168,.18);
+    border-radius:10px;
+    background:rgba(0,0,0,.22);
+}
+
+#menuScreen .menuButton{
+    width:min(100%, 390px);
+    min-height:44px;
+    font-size:12px;
+    background:linear-gradient(180deg, rgba(83,24,130,.76), rgba(30,5,65,.88));
+}
+
+#menuScreen .versionTag{
+    font-size:10px;
+    padding:4px 8px;
+    border-radius:999px;
+    background:rgba(0,0,0,.26);
+}
+
+@media (min-width: 700px){
+    #menuScreen .scene{
+        width:min(96vw, 520px);
+        height:min(96dvh, 920px);
+        border:4px solid #08010d;
+        border-radius:24px;
+    }
+}
+
+@media (max-height: 760px){
+    #menuScreen .setupPanel{
+        max-height:31dvh;
+    }
+    #menuScreen .menuButton{
+        min-height:40px;
+        font-size:11px;
+    }
+    #menuScreen .menuOverlay{
+        gap:6px;
+    }
+    #menuScreen .gameTitle{
+        top:14px;
+        font-size:30px;
+    }
+    #menuScreen .menuSubtitle,
+    #menuScreen .versionTag{
+        font-size:9px;
+    }
+}
+
+/* === v0.1.2 — Splash inicial + identidade Jamylle's Castle === */
+.splashIntroBadge{
+    position:absolute;
+    inset:0;
+    z-index:25;
+    display:grid;
+    place-items:center;
+    pointer-events:none;
+    background:linear-gradient(to bottom, rgba(0,0,0,.04), rgba(0,0,0,.16));
+    animation:splashBadgeOut .55s ease 1.5s forwards;
+}
+.splashIntroBadge span{
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-size:clamp(30px, 9vw, 56px);
+    line-height:.96;
+    text-align:center;
+    color:#fff0bc;
+    letter-spacing:1.5px;
+    text-shadow:
+        0 0 16px rgba(255,210,92,.95),
+        0 3px 0 rgba(47,7,77,.95),
+        0 10px 26px rgba(0,0,0,.76);
+    padding:0 18px;
+    animation:splashTitleIn .9s ease both;
+}
+@keyframes splashTitleIn{
+    from{ opacity:0; transform:translateY(12px) scale(.96); filter:blur(4px); }
+    to{ opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
+}
+@keyframes splashBadgeOut{
+    to{ opacity:0; transform:scale(1.04); filter:blur(5px); visibility:hidden; }
+}
+#menuScreen:not(.introComplete) .menuOverlay{
+    opacity:0;
+    transform:translateY(28px);
+    pointer-events:none;
+}
+#menuScreen.introComplete .menuOverlay{
+    animation:menuOverlayIn .72s cubic-bezier(.2,.85,.25,1) both;
+}
+@keyframes menuOverlayIn{
+    from{ opacity:0; transform:translateY(28px); filter:blur(8px); }
+    to{ opacity:1; transform:translateY(0); filter:blur(0); }
+}
+
+#menuScreen .poster{
+    filter:brightness(1.22) saturate(1.1) contrast(1.02);
+    object-position:center 42%;
+}
+#menuScreen .vignette{
+    background:
+        linear-gradient(to bottom,
+            rgba(0,0,0,.00) 0%,
+            rgba(0,0,0,.00) 36%,
+            rgba(0,0,0,.10) 58%,
+            rgba(0,0,0,.46) 100%),
+        radial-gradient(circle, transparent 66%, rgba(0,0,0,.18) 100%);
+}
+#menuScreen .gameTitle{
+    top:clamp(18px, 4.2dvh, 42px);
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-weight:900;
+    font-size:clamp(29px, 8.5vw, 50px);
+    letter-spacing:1px;
+    line-height:.9;
+    padding:0 16px;
+    color:#fff0bc;
+    text-shadow:
+        0 0 15px rgba(255,210,92,.88),
+        0 4px 0 rgba(47,7,77,.95),
+        0 12px 24px rgba(0,0,0,.75);
+}
+#menuScreen .menuOverlay{
+    padding:clamp(14px, 3dvh, 30px) 14px calc(12px + env(safe-area-inset-bottom));
+    gap:7px;
+}
+#menuScreen .menuSubtitle{
+    background:rgba(0,0,0,.18);
+    backdrop-filter:blur(2px);
+}
+#menuScreen .setupPanel{
+    background:rgba(7,1,19,.40);
+    backdrop-filter:blur(5px);
+    border-color:rgba(255,231,168,.30);
+    max-height:min(35dvh, 292px);
+}
+#menuScreen .setupPanel input,
+#menuScreen .setupPanel select{
+    background:rgba(0,0,0,.42);
+}
+#menuScreen .menuButton{
+    background:linear-gradient(180deg, rgba(83,24,130,.68), rgba(30,5,65,.82));
+    backdrop-filter:blur(5px);
+}
+@media (max-height:760px){
+    #menuScreen .setupPanel{ max-height:28dvh; }
+    #menuScreen .gameTitle{ font-size:28px; top:10px; }
+}
+@media (max-width:390px){
+    #menuScreen .setupPanel{
+        grid-template-columns:1fr 1fr;
+        width:100%;
+    }
+    #menuScreen .menuButton{ min-height:42px; }
+}

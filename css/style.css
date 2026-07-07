@@ -1,0 +1,326 @@
+:root{
+    --bg:#05010b;
+    --panel:#130426;
+    --panel-soft:rgba(10,2,22,.72);
+    --gold:#ffe7a8;
+    --gold-strong:#f1c40f;
+    --purple:#44106d;
+    --purple-soft:#8e44ad;
+    --text:#fff7df;
+    --danger:#f44336;
+    --blue:#2196f3;
+    --green:#2ecc71;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%;}
+body{
+    margin:0;
+    background:radial-gradient(circle at 50% 25%, #1a0635 0%, var(--bg) 62%);
+    color:var(--text);
+    font-family:Arial, Helvetica, sans-serif;
+    overflow:hidden;
+}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed; opacity:.55}
+.hidden{display:none!important}
+.screen{
+    display:none;
+    width:100vw;
+    min-height:100dvh;
+    place-items:center;
+}
+.screen.active{display:grid;}
+.fadeOut{animation:fadeOut .45s ease forwards;}
+@keyframes fadeOut{to{opacity:0; transform:scale(1.02);}}
+.modal{
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    display:grid;
+    place-items:center;
+    padding:20px;
+    background:rgba(0,0,0,.78);
+    backdrop-filter:blur(8px);
+}
+.modal[hidden]{display:none;}
+.modalCard{
+    width:min(92vw,520px);
+    border:2px solid rgba(255,231,168,.55);
+    border-radius:24px;
+    background:linear-gradient(180deg, rgba(36,9,58,.98), rgba(9,2,20,.98));
+    box-shadow:0 30px 100px rgba(0,0,0,.65);
+    padding:26px;
+    text-align:center;
+}
+.modalCard h2{margin:0 0 18px; color:var(--gold-strong);}
+.modalCard ol{padding-left:0; list-style:none; margin:0 0 22px; display:grid; gap:10px;}
+.modalCard li{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    border:1px solid rgba(255,231,168,.22);
+    background:rgba(255,255,255,.06);
+    border-radius:14px;
+}
+.modalActions{display:grid; gap:10px;}
+
+/* === v0.1.2 — Overlay de sorteio inicial === */
+.drawOverlay{
+    background:rgba(4,0,12,.72);
+    backdrop-filter:blur(10px);
+}
+.drawCard{
+    width:min(88vw,420px);
+    border:2px solid rgba(255,231,168,.58);
+    border-radius:26px;
+    padding:28px 20px;
+    text-align:center;
+    background:linear-gradient(180deg, rgba(42,10,74,.92), rgba(10,1,22,.96));
+    box-shadow:0 28px 90px rgba(0,0,0,.68), inset 0 0 26px rgba(255,211,98,.08);
+}
+.drawCard .drawLabel{
+    display:inline-block;
+    margin-bottom:12px;
+    color:rgba(255,247,223,.76);
+    text-transform:uppercase;
+    font-size:12px;
+    letter-spacing:2px;
+}
+.drawCard strong{
+    display:block;
+    min-height:64px;
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-size:clamp(28px, 9vw, 46px);
+    line-height:1;
+    color:#fff0bc;
+    text-shadow:0 0 14px rgba(255,210,92,.9), 0 4px 0 rgba(47,7,77,.95);
+}
+.drawCard small{
+    display:block;
+    margin-top:12px;
+    color:rgba(255,247,223,.7);
+}
+
+
+/* v0.3.0 — cerimônia da corte */
+.modalCard h2{
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    text-shadow:0 0 18px rgba(241,196,15,.36);
+}
+.modalCard li.rankCeremony{
+    align-items:center;
+    background:linear-gradient(90deg, rgba(255,231,168,.08), rgba(142,68,173,.08));
+    box-shadow:inset 0 0 18px rgba(255,231,168,.04);
+}
+.rankEmblem{display:inline-block; min-width:28px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));}
+.modalCard li.rank-majestade{
+    border-color:rgba(255,231,168,.7);
+    background:linear-gradient(90deg, rgba(255,231,168,.2), rgba(142,68,173,.11));
+    box-shadow:0 0 24px rgba(241,196,15,.18), inset 0 0 20px rgba(255,231,168,.06);
+}
+.modalCard li.rank-aldeao{
+    opacity:.88;
+}
+
+
+/* v0.3.1 — Troca da Corte sigilosa */
+.tradeModal{
+    background:radial-gradient(circle at 50% 20%, rgba(79,20,106,.58), rgba(0,0,0,.84));
+}
+.tradeCard{
+    position:relative;
+    overflow:hidden;
+}
+.tradeCard::before{
+    content:"";
+    position:absolute;
+    inset:10px;
+    border:1px solid rgba(255,231,168,.18);
+    border-radius:18px;
+    pointer-events:none;
+}
+.tradePrivacy{
+    margin:0 auto 16px;
+    color:rgba(255,247,223,.76);
+    line-height:1.42;
+    max-width:430px;
+}
+.tradeList{
+    list-style:none;
+    padding:0;
+    margin:16px 0;
+    display:grid;
+    gap:10px;
+}
+.tradeList li{
+    display:block;
+    text-align:left;
+    border:1px solid rgba(255,231,168,.22);
+    background:linear-gradient(90deg, rgba(255,231,168,.08), rgba(142,68,173,.08));
+    border-radius:16px;
+    padding:12px 14px;
+    color:rgba(255,247,223,.92);
+}
+.tradeList strong{
+    color:var(--gold-strong);
+}
+.tradeList small{
+    display:block;
+    margin-top:4px;
+    color:rgba(255,247,223,.64);
+}
+.tradeStarter{
+    margin:12px 0 18px;
+    padding:10px 12px;
+    border-radius:999px;
+    border:1px solid rgba(255,231,168,.24);
+    background:rgba(0,0,0,.24);
+    color:var(--gold);
+    font-weight:800;
+}
+
+
+/* === v0.5.0 — Lobby multiplayer online === */
+.onlineCard{
+    width:min(94vw,560px);
+    max-height:92dvh;
+    overflow:auto;
+}
+.onlineGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin:14px 0;
+    text-align:left;
+}
+.onlineGrid label{
+    display:grid;
+    gap:6px;
+    color:rgba(255,247,223,.82);
+    font-size:13px;
+    font-weight:800;
+}
+.onlineGrid input{
+    width:100%;
+    border:1px solid rgba(255,231,168,.32);
+    border-radius:14px;
+    padding:11px 12px;
+    color:#fff7df;
+    background:rgba(3,0,12,.58);
+    outline:none;
+}
+.onlineStatus{
+    margin:12px 0;
+    border:1px solid rgba(255,231,168,.22);
+    border-radius:16px;
+    padding:10px 12px;
+    background:rgba(255,231,168,.07);
+    color:rgba(255,247,223,.86);
+    font-size:13px;
+}
+.onlineStatus.error{
+    border-color:rgba(244,67,54,.55);
+    background:rgba(244,67,54,.13);
+}
+.onlineStatus.ok{
+    border-color:rgba(46,204,113,.48);
+    background:rgba(46,204,113,.11);
+}
+.onlineActions{
+    grid-template-columns:1fr 1fr;
+}
+.onlineLobby{
+    margin:16px 0;
+    border:1px solid rgba(255,231,168,.28);
+    border-radius:20px;
+    padding:14px;
+    background:linear-gradient(180deg, rgba(255,231,168,.08), rgba(4,0,12,.28));
+}
+.onlineLobbyHeader{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:12px;
+}
+.onlineLobbyHeader strong{
+    color:var(--gold-strong);
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+}
+.onlinePlayersList{
+    display:grid;
+    gap:8px;
+    margin:10px 0 14px;
+}
+.onlinePlayerRow{
+    display:grid;
+    grid-template-columns:1fr auto auto;
+    gap:8px;
+    align-items:center;
+    border:1px solid rgba(255,231,168,.18);
+    border-radius:14px;
+    padding:10px 12px;
+    background:rgba(0,0,0,.22);
+    text-align:left;
+}
+.onlinePlayerRow strong{
+    color:#fff7df;
+}
+.onlinePlayerRow span{
+    font-size:12px;
+    color:rgba(255,247,223,.72);
+}
+.onlinePill{
+    border-radius:999px;
+    padding:4px 8px;
+    font-size:11px;
+    font-weight:900;
+    background:rgba(255,231,168,.13);
+    border:1px solid rgba(255,231,168,.18);
+}
+.onlinePill.ready{
+    color:#c9ffdf;
+    border-color:rgba(46,204,113,.48);
+    background:rgba(46,204,113,.12);
+}
+.onlinePill.host{
+    color:#2b1600;
+    background:linear-gradient(180deg,#fff0ad,#d69a22);
+}
+.onlineHint{
+    margin:10px 0 0;
+    color:rgba(255,247,223,.64);
+    font-size:12px;
+    line-height:1.35;
+}
+@media (max-width:560px){
+    .onlineGrid,.onlineActions{
+        grid-template-columns:1fr;
+    }
+    .onlinePlayerRow{
+        grid-template-columns:1fr;
+    }
+}
+
+
+/* === v0.5.1 — Menu de sala unificado === */
+.roomMenuActions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+    width:100%;
+}
+.onlineRoomMeta{
+    margin:8px 0 12px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:center;
+}
+.onlineRoomMeta .onlinePill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+}

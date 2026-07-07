@@ -1,0 +1,7 @@
+@keyframes dropCard{
+    from{opacity:0; transform:translateY(-22px) translateX(var(--card-offset)) rotate(var(--card-rotation)) scale(1.14);}
+    to{opacity:1; transform:translateY(0) translateX(var(--card-offset)) rotate(var(--card-rotation)) scale(1);}
+}
+@media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.001ms!important; animation-iteration-count:1!important; scroll-behavior:auto!important; transition-duration:.001ms!important;}
+}

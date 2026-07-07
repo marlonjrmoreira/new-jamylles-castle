@@ -1,0 +1,91 @@
+.card{
+    position:relative;
+    flex:0 0 auto;
+    width:82px;
+    height:118px;
+    border:1px solid rgba(83,44,18,.38);
+    border-radius:13px;
+    background:linear-gradient(180deg,#fffdf7 0%,#f7edd8 74%,#e6d0a9 100%);
+    color:#1a1028;
+    box-shadow:0 10px 20px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 4px rgba(129,74,28,.08);
+    display:grid;
+    place-items:center;
+    font-weight:900;
+    transition:transform .22s ease, box-shadow .22s ease, outline-color .22s ease, filter .22s ease;
+    user-select:none;
+    overflow:hidden;
+}
+.card::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,.5),transparent 38%), radial-gradient(circle at center, transparent 54%, rgba(129,74,28,.12) 55%, transparent 58%);
+    pointer-events:none;
+}
+.card:not(:disabled):hover{transform:translateY(-8px); box-shadow:0 16px 30px rgba(0,0,0,.42);}
+.card.selected{
+    transform:translateY(-16px);
+    outline:3px solid var(--gold-strong);
+    box-shadow:0 20px 40px rgba(0,0,0,.52), 0 0 22px rgba(241,196,15,.32);
+    z-index:10;
+}
+.cardCorner{
+    position:absolute;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    line-height:.9;
+    font-size:18px;
+    z-index:2;
+}
+.cardCorner small{font-size:14px;}
+.cardCorner.top{top:7px; left:8px;}
+.cardCorner.bottom{right:8px; bottom:7px; transform:rotate(180deg);}
+.cardSymbol{
+    font-size:42px;
+    filter:drop-shadow(0 2px 1px rgba(0,0,0,.18));
+}
+.suit-papagaio .cardSymbol,.suit-papagaio .cardCorner{color:#c11b1b;}
+.suit-chinelo .cardSymbol,.suit-chinelo .cardCorner{color:#005c29;}
+.suit-cadeira .cardSymbol,.suit-cadeira .cardCorner{color:#a87900;}
+.suit-filtro .cardSymbol,.suit-filtro .cardCorner{color:#8a3600;}
+.suit-coringa,.suit-joker{background:linear-gradient(180deg,#fff,#e9e9f9);}
+.suit-coringa .cardSymbol,.suit-coringa .cardCorner,.suit-joker .cardSymbol,.suit-joker .cardCorner{color:#111;}
+.playedCard{
+    position:absolute;
+    transform:translateX(var(--card-offset)) translateY(var(--card-lift, 0px)) rotate(var(--card-rotation));
+    animation:dropCard .46s cubic-bezier(.2,.85,.25,1) both;
+    z-index:var(--card-z, 1);
+}
+.playedCard .cardSymbol{filter:drop-shadow(0 2px 1px rgba(0,0,0,.18));}
+
+@media (max-width:760px){
+    .card{width:66px; height:96px; border-radius:10px;}
+    .cardCorner{font-size:14px;}
+    .cardCorner small{font-size:11px;}
+    .cardSymbol{font-size:32px;}
+}
+
+.card.playableHint{filter:brightness(1.11) saturate(1.12); box-shadow:0 10px 20px rgba(0,0,0,.34), 0 0 20px rgba(241,196,15,.28), inset 0 0 0 4px rgba(241,196,15,.16);}
+.card.playableHint::before{content:""; position:absolute; inset:4px; border:1px solid rgba(241,196,15,.55); border-radius:10px; pointer-events:none; animation:playablePulse 1.2s ease-in-out infinite alternate; z-index:3;}
+@keyframes playablePulse{from{opacity:.35;} to{opacity:.95;}}
+.card.notPlayable{opacity:.54; filter:saturate(.62);}
+.playedCard.breakerCard{animation:royalDrop .62s cubic-bezier(.2,.85,.25,1) both;}
+@keyframes royalDrop{
+    0%{opacity:0; transform:translateY(-46px) translateX(var(--card-offset)) translateY(var(--card-lift,0px)) rotate(var(--card-rotation)) scale(1.35); filter:brightness(1.5);}
+    68%{opacity:1; transform:translateY(4px) translateX(var(--card-offset)) translateY(var(--card-lift,0px)) rotate(var(--card-rotation)) scale(1.06);}
+    100%{opacity:1; transform:translateY(0) translateX(var(--card-offset)) translateY(var(--card-lift,0px)) rotate(var(--card-rotation)) scale(1); filter:brightness(1);}
+}
+
+
+/* v0.3.0 — carta saindo da mão antes da jogada ser confirmada */
+.card.playCasting{
+    animation:castToTable .38s cubic-bezier(.22,.85,.25,1) forwards;
+    pointer-events:none;
+    z-index:50;
+}
+@keyframes castToTable{
+    0%{transform:translateY(-16px) scale(1); filter:brightness(1.05);}
+    70%{transform:translateY(-52px) scale(.92) rotate(3deg); filter:brightness(1.28); opacity:.96;}
+    100%{transform:translateY(-86px) scale(.74) rotate(7deg); filter:brightness(1.4); opacity:0;}
+}

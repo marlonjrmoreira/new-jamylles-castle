@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#120028">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&display=swap" rel="stylesheet">
+    <title>Jamylle's Castle</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/menu.css">
+    <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/animations.css">
+</head>
+<body>
+    <main id="menuScreen" class="screen active" aria-label="Tela inicial">
+        <div class="scene">
+            <img class="poster" src="assets/splash/splash.webp" alt="Castelo em pixel art do Jamylle's Castle">
+            <div class="splashIntroBadge">
+                <span>Jamylle's Castle</span>
+            </div>
+            <div class="logoGlow"></div>
+            <div class="cloud cloud1"></div>
+            <div class="cloud cloud2"></div>
+            <div class="princessFocus"></div>
+            <div class="faceGlow"></div>
+            <div class="hairLight"></div>
+            <div class="cardsMove"></div>
+            <div class="star" style="top:40px;left:50px;"></div>
+            <div class="star" style="top:90px;left:280px;animation-delay:1s;"></div>
+            <div class="star" style="top:130px;left:370px;animation-delay:.5s;"></div>
+            <div class="star" style="top:70px;left:180px;animation-delay:1.5s;"></div>
+            <div class="star" style="top:200px;left:90px;animation-delay:2s;"></div>
+            <div class="star" style="top:250px;left:330px;animation-delay:.8s;"></div>
+            <div class="star" style="top:180px;left:230px;animation-delay:1.7s;"></div>
+            <div class="scanlines"></div>
+            <div class="vignette"></div>
+
+            <section class="menuOverlay">
+                <h1 class="gameTitle">Jamylle's Castle</h1>
+                <p class="menuSubtitle">A corte das cartas</p>
+                <div class="setupPanel" aria-label="Configuração da sala">
+                    <label>
+                        Seu nome
+                        <input id="playerName" type="text" value="Marlon" maxlength="16">
+                    </label>
+                    <label>
+                        Nome da sala
+                        <input id="roomName" type="text" value="CASTELO26" maxlength="18">
+                    </label>
+                    <label>
+                        Senha da sala
+                        <input id="roomPassword" type="password" placeholder="opcional" maxlength="24">
+                    </label>
+                    <div class="setupGrid">
+                        <label>
+                            Bots
+                            <input id="botCount" type="number" min="2" max="19" value="3">
+                        </label>
+                        <label>
+                            Baralhos
+                            <input id="deckCount" type="number" min="1" max="6" value="1">
+                        </label>
+                    </div>
+                    <label class="inlineOption">
+                        <input id="includeJokers" type="checkbox">
+                        Usar coringas
+                    </label>
+                    <label class="inlineOption">
+                        <input id="soundEnabled" type="checkbox" checked>
+                        Sons do castelo
+                    </label>
+                    <button class="miniButton soundTestButton" type="button" data-action="sound-test">🔊 Testar som</button>
+                    <label class="inlineOption">
+                        <input id="allowObservers" type="checkbox" checked>
+                        Permitir observadores seguros
+                    </label>
+                    <label>
+                        Voz dos observadores
+                        <select id="observerVoicePolicy">
+                            <option value="listen-only" selected>Ouvem, mas não falam</option>
+                            <option value="muted">Sem voz</option>
+                            <option value="host-can-allow">Host pode liberar</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="roomMenuActions">
+                    <button class="menuButton" data-online-action="create-room" type="button">Criar sala</button>
+                    <button class="menuButton secondary" data-online-action="join-room" type="button">Buscar / entrar na sala</button>
+                </div>
+                <button class="menuButton secondary" data-action="observer-preview">Prévia Observador Seguro</button>
+                <button class="menuButton secondary" data-action="rules">Regras</button>
+                <span class="versionTag">v0.5.1 — sala unificada</span>
+            </section>
+        </div>
+    </main>
+
+    <main id="gameScreen" class="screen" aria-label="Mesa do jogo">
+        <section class="gameShell">
+            <header class="gameTopbar">
+                <div>
+                    <strong>Jamylle's Castle</strong>
+                    <span id="roomInfo">Sala local</span>
+                </div>
+                <div class="topbarActions">
+                    <button class="miniButton" data-action="observer-preview">Observador</button>
+                    <button class="miniButton" data-action="back-menu">Menu</button>
+                </div>
+            </header>
+
+            <section class="playersSummary" id="playersSummary" aria-label="Resumo público dos jogadores"></section>
+
+            <section class="tableArea" id="tableArea">
+                <div class="statusBox">
+                    <span id="turnInfo">Preparando partida...</span>
+                    <small id="ruleHint">Selecione cartas do mesmo valor.</small>
+                </div>
+                <div class="tableCards" id="tableCards" aria-label="Cartas na mesa"></div>
+                <div class="historyBox">
+                    <strong>Histórico da rodada</strong>
+                    <div id="roundHistory"></div>
+                </div>
+            </section>
+
+            <section class="playerPanel">
+                <div class="controls">
+                    <button id="playButton" class="controlButton primary" type="button" disabled>Jogar</button>
+                    <button id="passButton" class="controlButton danger" type="button" disabled>Passar</button>
+                    <button id="rematchButton" class="controlButton" type="button" hidden>Revanche</button>
+                </div>
+                <div class="selectionMessage" id="selectionMessage">Sua mão aparecerá aqui.</div>
+                <div class="playerHand" id="playerHand" aria-label="Suas cartas"></div>
+            </section>
+        </section>
+    </main>
+
+    <div id="drawOverlay" class="modal drawOverlay" hidden>
+        <div class="drawCard">
+            <span class="drawLabel">Sorteio inicial</span>
+            <strong id="drawName">Preparando...</strong>
+            <small>Quem for sorteado começa a primeira rodada.</small>
+        </div>
+    </div>
+
+    <div id="endModal" class="modal" hidden>
+        <div class="modalCard">
+            <h2>Cerimônia da Corte</h2>
+            <ol id="rankList"></ol>
+            <div class="modalActions">
+                <button class="menuButton" data-action="rematch">Revanche</button>
+                <button class="menuButton secondary" data-action="back-menu">Voltar ao menu</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tradeModal" class="modal tradeModal" hidden>
+        <div class="modalCard tradeCard">
+            <span class="drawLabel">Revanche</span>
+            <h2>Troca da Corte</h2>
+            <p class="tradePrivacy">As cartas foram trocadas em sigilo. Ninguém vê valores ou naipes nesta cerimônia.</p>
+            <ul id="tradeList" class="tradeList"></ul>
+            <p id="tradeStarter" class="tradeStarter">O Aldeão inicia a revanche.</p>
+            <div class="modalActions">
+                <button id="tradeContinueButton" class="menuButton" type="button">Iniciar revanche</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="onlineModal" class="modal onlineModal" hidden>
+        <div class="modalCard onlineCard">
+            <span class="drawLabel">Multiplayer</span>
+            <h2>Sala Online</h2>
+            <p class="tradePrivacy">Use o nome da sala do menu para criar ou buscar uma sala. Bots, baralhos e senha são configurações do anfitrião.</p>
+
+            <div class="onlineStatus" id="onlineStatus">Conectando ao Firebase...</div>
+
+            <div class="onlineGrid">
+                <label>
+                    Código da sala
+                    <input id="onlineRoomCode" type="text" maxlength="18" placeholder="Ex.: CASTELO26">
+                </label>
+                <label>
+                    Senha
+                    <input id="onlineRoomPassword" type="password" maxlength="24" placeholder="opcional">
+                </label>
+            </div>
+
+            <div class="modalActions onlineActions">
+                <button class="menuButton" data-online-action="create-room" type="button">Criar sala</button>
+                <button class="menuButton secondary" data-online-action="join-room" type="button">Entrar na sala</button>
+            </div>
+
+            <section id="onlineLobby" class="onlineLobby" hidden>
+                <div class="onlineLobbyHeader">
+                    <strong id="onlineLobbyTitle">Sala</strong>
+                    <button class="miniButton" data-online-action="copy-room" type="button">Copiar código</button>
+                </div>
+                <div id="onlinePlayersList" class="onlinePlayersList"></div>
+                <div class="modalActions onlineActions">
+                    <button class="menuButton secondary" data-online-action="toggle-ready" type="button" id="readyButton">Estou pronto</button>
+                    <button class="menuButton" data-online-action="start-online" type="button" id="startOnlineButton" disabled>Iniciar online</button>
+                    <button class="menuButton secondary" data-online-action="leave-room" type="button">Sair da sala</button>
+                </div>
+                <p class="onlineHint">
+                    v0.5.1 unifica o fluxo: criar sala, buscar sala, bots, baralhos, senha, host e jogadores prontos.
+                    A partida online jogável e a voz serão conectadas nas próximas versões.
+                </p>
+            </section>
+
+            <div class="modalActions">
+                <button class="menuButton secondary" data-online-action="close-online" type="button">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <audio id="menuThemeAudio" src="assets/audio/menu-theme.mp3" preload="auto" loop></audio>
+    <script src="js/app.bundle.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js" defer></script>
+    <script src="js/online.js" defer></script>
+</body>
+</html>

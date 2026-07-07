@@ -1,0 +1,428 @@
+/* === Jamylle's Castle v0.2.1 — Pátio superior do castelo === */
+#gameScreen{
+    background:
+        linear-gradient(90deg, rgba(32,27,34,.98) 0 clamp(34px,7vw,92px), transparent clamp(34px,7vw,92px) calc(100% - clamp(34px,7vw,92px)), rgba(32,27,34,.98) calc(100% - clamp(34px,7vw,92px)) 100%),
+        linear-gradient(180deg, rgba(37,31,39,.98) 0 clamp(28px,5.5vw,78px), transparent clamp(28px,5.5vw,78px) calc(100% - clamp(24px,4.8vw,64px)), rgba(37,31,39,.94) calc(100% - clamp(24px,4.8vw,64px)) 100%),
+        radial-gradient(circle at 50% 14%, rgba(255,213,110,.2), transparent 24%),
+        repeating-linear-gradient(90deg, rgba(255,231,168,.055) 0 2px, transparent 2px 74px),
+        repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 2px, transparent 2px 58px),
+        radial-gradient(ellipse at center, #51444a 0%, #2f2730 46%, #14070f 100%);
+    position:relative;
+    overflow:hidden;
+}
+#gameScreen::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:
+        repeating-linear-gradient(90deg, rgba(255,231,168,.28) 0 18px, transparent 18px 34px) top left / 100% clamp(16px,3vw,36px) no-repeat,
+        repeating-linear-gradient(90deg, rgba(8,6,10,.3) 0 3px, transparent 3px 30px) top left / 100% clamp(28px,5.5vw,78px) no-repeat,
+        repeating-linear-gradient(0deg, rgba(255,231,168,.22) 0 18px, transparent 18px 34px) top left / clamp(34px,7vw,92px) 100% no-repeat,
+        repeating-linear-gradient(0deg, rgba(255,231,168,.22) 0 18px, transparent 18px 34px) top right / clamp(34px,7vw,92px) 100% no-repeat,
+        radial-gradient(circle at 50% 42%, rgba(255,231,168,.11), transparent 35%);
+    opacity:.82;
+}
+#gameScreen::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:48%;
+    width:min(64vw,620px);
+    aspect-ratio:1/1;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    border:2px solid rgba(255,231,168,.08);
+    background:radial-gradient(circle, rgba(255,231,168,.055), transparent 62%);
+    pointer-events:none;
+}
+.gameShell::before,
+.gameShell::after{
+    content:"";
+    position:fixed;
+    top:clamp(30px,5.8vw,82px);
+    bottom:clamp(24px,4.8vw,64px);
+    width:clamp(34px,7vw,92px);
+    pointer-events:none;
+    z-index:-1;
+    opacity:.95;
+    background:
+        repeating-linear-gradient(0deg, rgba(255,231,168,.18) 0 2px, transparent 2px 32px),
+        linear-gradient(90deg, rgba(255,231,168,.16), rgba(0,0,0,.28));
+}
+.gameShell::before{left:0; box-shadow:inset -18px 0 28px rgba(0,0,0,.35);}
+.gameShell::after{right:0; transform:scaleX(-1); box-shadow:inset -18px 0 28px rgba(0,0,0,.35);}
+#gameScreen.tension-high .tableArea,
+#gameScreen.tension-critical .tableArea{
+    box-shadow:0 18px 70px rgba(0,0,0,.55), 0 0 44px rgba(255,147,58,.24), inset 0 0 34px rgba(255,217,112,.1);
+}
+#gameScreen.tension-critical .tableArea{
+    animation:courtTension 1.15s ease-in-out infinite alternate;
+}
+@keyframes courtTension{
+    from{filter:brightness(1);}
+    to{filter:brightness(1.13);}
+}
+.gameShell{
+    width:min(100vw, calc(100dvh * 9 / 16), 560px);
+    min-height:100dvh;
+    margin:0 auto;
+    padding:18px;
+    display:grid;
+    grid-template-rows:auto auto minmax(300px,1fr) auto;
+    gap:12px;
+    position:relative;
+    z-index:1;
+}
+.gameTopbar,.playerPanel,.tableArea{
+    border:2px solid rgba(255,231,168,.32);
+    border-radius:22px;
+    background:
+        linear-gradient(180deg, rgba(59,16,65,.84), rgba(19,5,20,.9)),
+        radial-gradient(circle at top, rgba(255,231,168,.09), transparent 48%);
+    box-shadow:0 18px 60px rgba(0,0,0,.48), inset 0 0 28px rgba(255,231,168,.06);
+}
+.gameTopbar{
+    padding:14px 16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    position:relative;
+    overflow:hidden;
+}
+.gameTopbar::before{
+    content:"";
+    position:absolute;
+    inset:5px;
+    border:1px solid rgba(255,231,168,.16);
+    border-radius:17px;
+    pointer-events:none;
+}
+.gameTopbar strong{
+    display:block;
+    color:var(--gold-strong);
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-size:19px;
+    text-shadow:0 0 10px rgba(255,200,92,.4);
+}
+.gameTopbar span{font-size:13px; color:rgba(255,247,223,.78);}
+.topbarActions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;}
+.miniButton{
+    border:1px solid rgba(255,231,168,.34);
+    color:var(--text);
+    background:linear-gradient(180deg, rgba(255,231,168,.15), rgba(40,8,50,.65));
+    padding:8px 10px;
+    border-radius:999px;
+    font-size:12px;
+}
+.playersSummary{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    justify-content:center;
+    color:rgba(255,247,223,.84);
+}
+.playerBadge{
+    min-width:126px;
+    border:1px solid rgba(255,231,168,.26);
+    background:linear-gradient(180deg, rgba(78,31,41,.78), rgba(20,7,22,.78));
+    border-radius:16px;
+    padding:9px 11px;
+    font-size:13px;
+    text-align:center;
+    transition:.25s ease;
+    position:relative;
+    box-shadow:inset 0 0 16px rgba(255,231,168,.05), 0 8px 24px rgba(0,0,0,.25);
+}
+.playerBadge::before{
+    content:"♜";
+    display:block;
+    color:rgba(255,231,168,.58);
+    font-size:15px;
+    line-height:1;
+    margin-bottom:2px;
+}
+.playerBadge strong{display:block; color:var(--text);}
+.playerBadge span{display:block; color:rgba(255,247,223,.75); font-size:12px; margin-top:2px;}
+.playerBadge em{display:inline-block; margin-top:6px; color:#251000; background:linear-gradient(180deg,#fff0ad,#d69a22); border-radius:999px; padding:3px 8px; font-style:normal; font-weight:800; font-size:11px; box-shadow:0 0 12px rgba(241,196,15,.25);}
+.playerBadge.active{border-color:var(--gold-strong); box-shadow:0 0 22px rgba(241,196,15,.38), inset 0 0 22px rgba(255,231,168,.08); transform:translateY(-2px) scale(1.02);}
+.playerBadge.active::before{content:"👑";}
+.playerBadge.passed{opacity:.48; filter:saturate(.6);}
+.playerBadge.finished{background:linear-gradient(180deg, rgba(255,231,168,.14), rgba(40,12,30,.78)); opacity:.95;}
+.tableArea{
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    gap:12px;
+    padding:16px;
+    min-height:340px;
+    background:
+        linear-gradient(90deg, transparent 0 12%, rgba(92,14,35,.7) 12% 88%, transparent 88% 100%),
+        radial-gradient(ellipse at center, rgba(139,32,50,.7) 0%, rgba(70,18,48,.78) 44%, rgba(21,7,23,.92) 100%),
+        repeating-linear-gradient(90deg, rgba(255,231,168,.04) 0 2px, transparent 2px 52px),
+        repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 2px, transparent 2px 46px);
+    position:relative;
+    overflow:hidden;
+}
+.tableArea::before{
+    content:"";
+    position:absolute;
+    inset:14px;
+    border:2px solid rgba(255,231,168,.18);
+    border-radius:18px;
+    pointer-events:none;
+}
+.tableArea::after{
+    content:"Pátio da Corte";
+    position:absolute;
+    right:22px;
+    bottom:14px;
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    color:rgba(255,231,168,.12);
+    font-size:40px;
+    pointer-events:none;
+}
+.statusBox{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    text-align:center;
+    position:relative;
+    z-index:2;
+}
+#turnInfo{
+    font-weight:900;
+    color:var(--gold-strong);
+    font-family:Georgia, 'Times New Roman', serif;
+    letter-spacing:.2px;
+    text-shadow:0 0 10px rgba(255,196,60,.35);
+}
+#ruleHint{color:rgba(255,247,223,.78);}
+.tableCards{
+    position:relative;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:190px;
+    border:2px dashed rgba(255,231,168,.28);
+    border-radius:20px;
+    overflow:visible;
+    background:
+        radial-gradient(ellipse at center, rgba(255,231,168,.08), transparent 56%),
+        linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.26));
+    z-index:1;
+}
+.tableCards.pendingClear{
+    border-style:solid;
+    border-color:rgba(255,231,168,.54);
+    animation:pendingGlow .65s ease-in-out infinite alternate;
+}
+@keyframes pendingGlow{
+    from{box-shadow:0 0 0 rgba(241,196,15,0);}
+    to{box-shadow:0 0 34px rgba(241,196,15,.28);}
+}
+.emptyTable{color:rgba(255,247,223,.55); font-size:22px; font-weight:900; text-transform:uppercase; letter-spacing:2px;}
+.emptyTable::before{content:"⚜ "; color:rgba(255,231,168,.58);}
+.emptyTable::after{content:" ⚜"; color:rgba(255,231,168,.58);}
+.tableOwner{
+    position:absolute;
+    top:10px;
+    left:50%;
+    transform:translateX(-50%);
+    padding:6px 12px;
+    border-radius:999px;
+    background:rgba(0,0,0,.5);
+    color:var(--gold);
+    font-size:12px;
+    z-index:20;
+    border:1px solid rgba(255,231,168,.22);
+}
+.tableComboCaption{
+    position:absolute;
+    bottom:10px;
+    left:50%;
+    transform:translateX(-50%);
+    padding:6px 12px;
+    border-radius:999px;
+    background:rgba(12,4,20,.68);
+    color:rgba(255,247,223,.88);
+    font-size:12px;
+    z-index:20;
+    border:1px solid rgba(255,231,168,.16);
+    box-shadow:0 8px 18px rgba(0,0,0,.28);
+}
+.historyBox{
+    border-top:1px solid rgba(255,231,168,.18);
+    padding-top:10px;
+    display:grid;
+    gap:8px;
+    position:relative;
+    z-index:2;
+}
+.historyBox strong{color:var(--gold); font-size:13px; text-transform:uppercase; letter-spacing:1px;}
+#roundHistory{display:flex; flex-wrap:wrap; gap:8px; color:rgba(255,247,223,.72); font-size:12px;}
+.historyItem{border:1px solid rgba(255,231,168,.18); border-radius:999px; padding:6px 10px; background:rgba(255,231,168,.07);}
+.playerPanel{padding:14px; display:grid; gap:10px;}
+.controls{display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+.controlButton{
+    border:2px solid rgba(255,231,168,.7);
+    border-radius:999px;
+    padding:12px 22px;
+    color:#fff7df;
+    background:linear-gradient(180deg, rgba(83,24,130,.72), rgba(31,5,42,.94));
+    font-weight:900;
+    text-transform:uppercase;
+    box-shadow:0 6px 0 rgba(0,0,0,.34), inset 0 0 14px rgba(255,231,168,.08);
+}
+.controlButton:active:not(:disabled){transform:translateY(3px); box-shadow:0 3px 0 rgba(0,0,0,.34);}
+.controlButton.primary{background:linear-gradient(180deg,#4877d9,#1a357a);}
+.controlButton.danger{background:linear-gradient(180deg,#a72d3b,#5c0f1d);}
+.selectionMessage{text-align:center; color:rgba(255,247,223,.78); min-height:18px; font-size:13px;}
+.playerHand{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(74px, 1fr));
+    gap:10px;
+    align-items:start;
+    justify-items:center;
+    max-height:min(32dvh, 260px);
+    min-height:118px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding:8px 6px 12px;
+    scroll-behavior:smooth;
+    scrollbar-width:thin;
+    scrollbar-color:rgba(255,231,168,.55) rgba(0,0,0,.18);
+}
+.observerNotice{
+    width:100%;
+    text-align:center;
+    color:rgba(255,247,223,.78);
+    line-height:1.5;
+}
+@media (max-width:760px){
+    .gameShell{padding:10px; gap:8px; grid-template-rows:auto auto minmax(255px,1fr) auto;}
+    .gameTopbar{align-items:flex-start;}
+    .gameTopbar strong{font-size:16px;}
+    .tableArea{padding:10px; min-height:280px;}
+    .tableArea::after{font-size:28px; right:16px; bottom:10px;}
+    .playersSummary{max-height:112px; overflow:auto;}
+    .playerBadge{min-width:98px; padding:7px 8px;}
+    .controlButton{padding:10px 16px; font-size:13px;}
+    .playerHand{min-height:122px;}
+    .tableCards{min-height:152px;}
+}
+
+.soundTestButton{width:100%; justify-content:center; margin-top:-4px; background:linear-gradient(180deg, rgba(255,231,168,.22), rgba(52,13,64,.78));}
+
+
+/* v0.2.3 — mão em grade vertical para smartphones */
+.playerHand::-webkit-scrollbar{
+    width:8px;
+    height:0;
+}
+.playerHand::-webkit-scrollbar-track{
+    background:rgba(0,0,0,.18);
+    border-radius:999px;
+}
+.playerHand::-webkit-scrollbar-thumb{
+    background:linear-gradient(180deg, rgba(255,231,168,.72), rgba(142,68,173,.52));
+    border-radius:999px;
+}
+.playerHand .card{
+    margin:0;
+}
+@media (max-width:760px){
+    .playerPanel{
+        max-height:42dvh;
+        overflow:hidden;
+    }
+    .playerHand{
+        grid-template-columns:repeat(4, minmax(58px, 1fr));
+        gap:8px;
+        max-height:26dvh;
+        min-height:104px;
+        padding:8px 4px 14px;
+        overscroll-behavior:contain;
+    }
+}
+@media (max-width:390px){
+    .playerHand{
+        grid-template-columns:repeat(3, minmax(62px, 1fr));
+        max-height:28dvh;
+    }
+}
+
+
+/* v0.3.0 — ritmo cinematográfico e distribuição */
+#gameScreen.dealing-cards .tableCards{
+    border-color:rgba(255,231,168,.58);
+    box-shadow:0 0 42px rgba(241,196,15,.18), inset 0 0 26px rgba(255,231,168,.08);
+}
+#gameScreen.dealing-cards .tableCards::before{
+    content:"Distribuindo cartas";
+    position:absolute;
+    inset:auto auto 18px 50%;
+    transform:translateX(-50%);
+    padding:7px 14px;
+    border-radius:999px;
+    color:#fff2bc;
+    background:rgba(12,4,20,.72);
+    border:1px solid rgba(255,231,168,.28);
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-size:12px;
+    letter-spacing:.6px;
+    z-index:30;
+    animation:dealPulse .75s ease-in-out infinite alternate;
+}
+#gameScreen.dealing-cards .playerHand .card{
+    animation:dealToHand .58s cubic-bezier(.18,.78,.22,1.08) both;
+    animation-delay:calc(var(--deal-index, 0) * 34ms);
+    pointer-events:none;
+}
+#gameScreen.play-impact .tableCards{
+    animation:tableBeat .52s ease both;
+}
+#gameScreen.royal-impact .tableCards,
+#gameScreen.chaos-impact .tableCards{
+    animation:royalTremor .9s ease both;
+}
+#gameScreen.royal-impact .tableArea::after,
+#gameScreen.chaos-impact .tableArea::after{
+    left:50%;
+    right:auto;
+    bottom:auto;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:max-content;
+    max-width:88%;
+    text-align:center;
+    font-size:clamp(26px, 8vw, 58px);
+    color:rgba(255,236,160,.26);
+    text-shadow:0 0 28px rgba(255,196,60,.35);
+    z-index:0;
+}
+#gameScreen.royal-impact .tableArea::after{content:"ORDEM REAL";}
+#gameScreen.chaos-impact .tableArea::after{content:"CAOS DO CORINGA"; color:rgba(221,170,255,.26);}
+@keyframes dealToHand{
+    0%{opacity:0; transform:translateY(-82px) scale(.68) rotate(-7deg); filter:brightness(1.45);}
+    72%{opacity:1; transform:translateY(4px) scale(1.04) rotate(1deg);}
+    100%{opacity:1; transform:translateY(0) scale(1) rotate(0deg); filter:brightness(1);}
+}
+@keyframes dealPulse{
+    from{opacity:.58; transform:translateX(-50%) scale(.98);}
+    to{opacity:1; transform:translateX(-50%) scale(1.03);}
+}
+@keyframes tableBeat{
+    0%{transform:scale(1); filter:brightness(1);}
+    45%{transform:scale(1.018); filter:brightness(1.18);}
+    100%{transform:scale(1); filter:brightness(1);}
+}
+@keyframes royalTremor{
+    0%,100%{transform:translateX(0); filter:brightness(1);}
+    12%{transform:translateX(-3px); filter:brightness(1.28);}
+    24%{transform:translateX(4px);}
+    36%{transform:translateX(-2px);}
+    48%{transform:translateX(2px);}
+    62%{transform:translateX(0); filter:brightness(1.12);}
+}
