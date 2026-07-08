@@ -25,7 +25,7 @@
 
   let app, auth, db, currentUser;
   let currentRoomCode = '', currentRoom = null, currentPlayers = [], currentHand = [];
-  let selectedCardIds = new Set(), onlineMode = false, processingActions = false;
+  let selectedCardIds = new Set(), onlineMode = false, processingActions = false, botBusy = false;
   let lastSfxTurnCounter = -1, lastSfxPhase = '';
   let roomUnsub, playersUnsub, handUnsub, actionsUnsub, heartbeatTimer, botTimer, transitionTimer;
   const dom = {};
@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.0: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.1: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -231,7 +231,7 @@
   }
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.0: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.1: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -327,7 +327,7 @@
     const pending=humans.filter(p=>p.uid!==currentRoom.hostUid&&!p.ready);
     if(humans.length+botCount<3){setStatus('A partida precisa de pelo menos 3 participantes somando jogadores humanos e bots.','error');return;}
     if(pending.length){setStatus(`Ainda falta pronto de: ${pending.map(p=>p.name||'Jogador').join(', ')}.`, 'error');return;}
-    stopMenuMusic(); sfx('draw'); await startGameAsHost(humans,botCount); setStatus('Partida iniciada. Cartas distribuídas.','ok'); enterOnlineTable();
+    stopMenuMusic(); sfx('draw'); await startGameAsHost(humans,botCount); setStatus('Partida iniciada. Cartas distribuídas.','ok'); enterOnlineTable(); window.setTimeout(scheduleBotIfNeeded, 450);
   }
   async function startGameAsHost(humans,botCount){
     const batch=db.batch(); const bots=[];
@@ -436,14 +436,14 @@
     if(unfinished.length<=1){if(unfinished[0]&&!game.finishedOrder.includes(unfinished[0]))game.finishedOrder.push(unfinished[0]); game.phase='finished'; game.turnUid=''; game.lastMessage='Fim da partida online!';}
     else if(isBreaker(combo)){batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); window.setTimeout(()=>hostClear(uid),850); return;}
     else{game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||'';}
-    batch.set(roomRef(currentRoomCode),{game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit();
+    batch.set(roomRef(currentRoomCode),{game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,phase:game.phase,game}; window.setTimeout(scheduleBotIfNeeded, 220);
   }
   async function hostPass(uid,actionId=null){
     if(!isHost()||!currentRoom?.game)return; const game=clone(currentRoom.game); if(uid!==game.turnUid||!game.tableCombo)return;
     const player=currentPlayers.find(p=>p.uid===uid); game.passes={...(game.passes||{}),[uid]:true}; game.turnCounter=Number(game.turnCounter||0)+1; game.history=[...(game.history||[]),{type:'pass',playerUid:uid,playerName:player?.name||'Jogador',turn:game.turnCounter}].slice(-40); game.lastMessage=`${player?.name||'Jogador'} passou.`;
     const challengers=unfinishedUids(game).filter(x=>x!==game.tableOwnerUid); const everyone=challengers.length===0||challengers.every(x=>game.passes?.[x]); const batch=db.batch();
     if(everyone){batch.set(roomRef(currentRoomCode),{game,publicMessage:'A corte observa a última jogada antes da mesa limpar.',updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); window.setTimeout(()=>hostClear(game.tableOwnerUid),850); return;}
-    game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit();
+    game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,game}; window.setTimeout(scheduleBotIfNeeded, 220);
   }
   async function hostClear(ownerUid){
     if(!isHost())return; const snap=await roomRef(currentRoomCode).get(); if(!snap.exists)return; const game=clone(snap.data().game||{}); if(game.phase!=='playing')return;
@@ -451,9 +451,75 @@
     if(!unfinished.length){game.phase='finished'; game.turnUid='';} else if(ownerUid&&unfinished.includes(ownerUid))game.turnUid=ownerUid; else game.turnUid=nextUid(game,ownerUid||game.turnUid,true)||unfinished[0];
     game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; game.lastMessage=game.phase==='finished'?'Fim da partida online!':`Mesa limpa. ${game.turnName||'Jogador'} inicia a nova rodada.`;
     if(game.phase !== 'finished') sfx('tableClear', 'normal');
-    await roomRef(currentRoomCode).set({game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true});
+    await roomRef(currentRoomCode).set({game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); currentRoom={...currentRoom,phase:game.phase,game}; window.setTimeout(scheduleBotIfNeeded, 220);
   }
-  function scheduleBotIfNeeded(){ window.clearTimeout(botTimer); if(!isHost()||!currentRoom?.game||currentRoom.game.phase!=='playing')return; const uid=currentRoom.game.turnUid; if(!String(uid).startsWith('bot-'))return; botTimer=window.setTimeout(async()=>{const snap=await handRef(currentRoomCode,uid).get(); const hand=snap.exists?sortCards(snap.data().cards||[]):[]; if(!hand.length)return; const cards=botChoice(hand,currentRoom.game.tableCombo); if(cards.length)await hostPlay(uid,cards.map(c=>c.id)); else if(currentRoom.game.tableCombo)await hostPass(uid);},900+Math.floor(Math.random()*700));}
+  function scheduleBotIfNeeded(){
+    window.clearTimeout(botTimer);
+    if(!isHost() || !currentRoomCode) return;
+    botTimer = window.setTimeout(() => runBotTurn('scheduled'), 520 + Math.floor(Math.random()*520));
+  }
+
+  async function runBotTurn(reason=''){
+    if(botBusy || !isHost() || !currentRoomCode) return;
+    botBusy = true;
+    try{
+      const roomSnap = await roomRef(currentRoomCode).get();
+      if(!roomSnap.exists) return;
+      const room = roomSnap.data();
+      const game = room?.game;
+      currentRoom = {...currentRoom, ...room};
+      if(!game || game.phase !== 'playing') return;
+
+      const uid = game.turnUid || '';
+      const player = currentPlayers.find(p => p.uid === uid);
+      const isBotTurn = String(uid).startsWith('bot-') || player?.isBot === true;
+      if(!isBotTurn) return;
+
+      const handSnap = await handRef(currentRoomCode, uid).get();
+      const hand = handSnap.exists ? sortCards(handSnap.data().cards || []) : [];
+
+      if(!hand.length){
+        await hostAutoFinishEmptyBot(uid, game);
+        return;
+      }
+
+      const cards = botChoice(hand, game.tableCombo);
+      if(cards.length){
+        await hostPlay(uid, cards.map(c => c.id));
+      }else if(game.tableCombo){
+        await hostPass(uid);
+      }else{
+        // Mesa livre e sem escolha não deveria acontecer, mas evita travar.
+        await hostPlay(uid, [hand[0].id]);
+      }
+    }catch(error){
+      console.warn('Erro no bot online:', error);
+      setStatus(`Erro no bot: ${error.message || error}`, 'error');
+    }finally{
+      botBusy = false;
+    }
+  }
+
+  async function hostAutoFinishEmptyBot(uid, sourceGame){
+    const game = clone(sourceGame || currentRoom?.game || {});
+    if(!uid || game.phase !== 'playing') return;
+    if(!(game.finishedOrder || []).includes(uid)) game.finishedOrder = [...(game.finishedOrder || []), uid];
+    const unfinished = unfinishedUids(game);
+    if(unfinished.length <= 1){
+      if(unfinished[0] && !game.finishedOrder.includes(unfinished[0])) game.finishedOrder.push(unfinished[0]);
+      game.phase = 'finished';
+      game.turnUid = '';
+      game.lastMessage = 'Fim da partida online!';
+    }else{
+      game.turnUid = nextUid(game, uid, true);
+      game.turnName = currentPlayers.find(p => p.uid === game.turnUid)?.name || '';
+      game.lastMessage = `${currentPlayers.find(p => p.uid === uid)?.name || 'Bot'} terminou as cartas.`;
+    }
+    await roomRef(currentRoomCode).set({game, phase:game.phase, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    currentRoom = {...currentRoom, phase:game.phase, game};
+    window.setTimeout(scheduleBotIfNeeded, 220);
+  }
+
   function botChoice(hand,table){ const g=new Map(); hand.forEach(c=>{const p=Number(c.power); if(!g.has(p))g.set(p,[]); g.get(p).push(c);}); const cand=[]; g.forEach((cards,p)=>{if(!table)cand.push(cards.slice(0,1)); else if(cards.length>=table.count&&Number(p)>Number(table.power))cand.push(cards.slice(0,table.count));}); if(!cand.length)return[]; cand.sort((a,b)=>Number(a[0].power)-Number(b[0].power)||a.length-b.length); if(table){const nb=cand.filter(c=>Number(c[0].power)<cardPower('2')); if(nb.length)return nb[0];} return cand[0];}
   async function leaveRoom(){
     if(currentRoomCode&&currentUser){
@@ -493,7 +559,8 @@
 
   window.setInterval(() => {
     forceEnterIfStarted('global-watch');
-  }, 800);
+    if(isHost() && currentRoom?.game?.phase === 'playing') scheduleBotIfNeeded();
+  }, 1400);
 
   window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom};
 })();

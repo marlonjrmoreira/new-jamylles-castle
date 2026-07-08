@@ -278,3 +278,12 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - Erros de entrada/saída/mute da voz são tratados sem travar o fluxo da partida.
 - A voz continua sendo preparada no lobby ao criar/entrar na sala.
 - Sem mudança nas Rules do Firebase.
+
+
+## v0.7.1
+- Corrigido motor dos bots no modo online.
+- O anfitrião agora roda uma checagem periódica do turno dos bots.
+- Bots jogam automaticamente quando a vez é deles, mesmo sem convidados humanos.
+- Após jogadas, passes e limpeza da mesa, o próximo bot é agendado novamente.
+- Adicionada proteção para bot sem cartas não travar a partida.
+- Sem mudanças nas Rules do Firebase.
