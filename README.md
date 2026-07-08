@@ -307,3 +307,12 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
   - `applyBotMove()` aplica a decisão no estado da sala.
 - O navegador do anfitrião atua apenas como processador temporário da sala em GitHub Pages, não como controlador do bot.
 - Mantida compatibilidade com Firebase atual, sem necessidade de mudar Rules.
+
+
+## v0.7.4
+- Correção focada na entrada do convidado na mesa quando o anfitrião inicia a partida.
+- Adicionado cache-busting em CSS/JS locais (`?v=074`) para impedir celular/navegador de carregar `online.js` antigo.
+- Entrada na mesa agora força diretamente as classes, estilos e estado visual da tela de jogo.
+- Convidado passa a fazer leitura direta periódica do documento da sala, além dos snapshots do Firestore.
+- Se `onlineMode` já estiver ativo mas a tela ainda estiver presa no menu, a interface é forçada novamente para a mesa.
+- Sem mudanças nas Rules do Firebase.

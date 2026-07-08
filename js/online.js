@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.3: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.4: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -233,7 +233,7 @@
     playersUnsub=roomRef(code).collection('players').orderBy('joinedAt','asc').onSnapshot(s=>{
       currentPlayers=s.docs.map(d=>({id:d.id,...d.data()}));
       const me=currentPlayers.find(p=>p.uid===currentUser?.uid);
-      if(me?.gameStarted && !onlineMode){ forceEnterIfStarted('player-start-signal'); }
+      if(me?.gameStarted && !onlineMode){ forceSyncStartedRoom('player-start-signal'); }
       if(me && !me.isHost && !me.isBot && currentRoom?.phase==='lobby' && me.ready!==true){
         playerRef(code,currentUser.uid).set({ready:true,lastSeen:ts()},{merge:true}).catch(console.warn);
       }
@@ -256,7 +256,7 @@
   }
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.3: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.4: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -265,12 +265,55 @@
       processActionsAsHost(pending);
     }, e=>setStatus(`Erro nas ações: ${e.message}`,'error'));
   }
+  function ensureOnlineTableVisible(){
+    collectDom();
+    const menu = dom.menuScreen || document.getElementById('menuScreen');
+    const game = dom.gameScreen || document.getElementById('gameScreen');
+    if(menu){
+      menu.classList.remove('active');
+      menu.setAttribute('aria-hidden','true');
+      menu.style.display='none';
+    }
+    if(game){
+      game.hidden=false;
+      game.removeAttribute('aria-hidden');
+      game.classList.add('active');
+      game.style.display='grid';
+    }
+    document.body.classList.add('onlineGameActive');
+    document.documentElement.classList.add('onlineGameActive');
+    window.scrollTo?.(0,0);
+  }
+
+  async function forceSyncStartedRoom(source='sync'){
+    if(!currentRoomCode) return false;
+    try{
+      const snap = await roomRef(currentRoomCode).get();
+      if(!snap.exists) return false;
+      const room = snap.data() || null;
+      currentRoom = room;
+      if(!shouldEnterGame(room)) return false;
+      if(!onlineMode) setStatus('Partida iniciada. Entrando na mesa...', 'ok');
+      enterOnlineTable(true);
+      return true;
+    }catch(error){
+      console.warn('Falha na sincronização direta da partida:', error);
+      return false;
+    }
+  }
+
   function shouldEnterGame(room){
     return Boolean(room && (room.phase === 'playing' || room.phase === 'finished' || room.game?.phase === 'playing' || room.game?.phase === 'finished'));
   }
   async function forceEnterIfStarted(source='sync'){
-    if(!currentRoomCode || onlineMode) return false;
+    if(!currentRoomCode) return false;
     try{
+      if(onlineMode){
+        ensureOnlineTableVisible();
+        renderOnlineGame();
+        return true;
+      }
+
       let room = currentRoom;
       if(!shouldEnterGame(room)){
         const snap = await roomRef(currentRoomCode).get();
@@ -284,14 +327,21 @@
       return true;
     }catch(error){
       console.warn('Falha ao forçar entrada na mesa:', error);
-      return false;
+      // Último fallback: se a sala realmente começou, tentar sincronização direta.
+      return forceSyncStartedRoom(source + '-fallback');
     }
   }
   function startTransitionWatcher(){
     window.clearInterval(transitionTimer);
     transitionTimer = window.setInterval(() => {
-      forceEnterIfStarted('poll');
-    }, 900);
+      if(!currentRoomCode) return;
+      if(onlineMode){
+        ensureOnlineTableVisible();
+        return;
+      }
+      // Leitura direta do documento da sala: evita depender só do snapshot em celulares/cache.
+      forceSyncStartedRoom('poll-direct');
+    }, 700);
   }
   function detachRoom(){
     if(roomUnsub)roomUnsub(); if(playersUnsub)playersUnsub(); if(handUnsub)handUnsub(); if(actionsUnsub)actionsUnsub();
@@ -370,13 +420,13 @@
   function enterOnlineTable(force=false){
     if(!currentRoomCode) return;
     if(!currentRoom && !force) return;
-    stopMenuMusic(); window.jcSfx?.stopAll?.(); onlineMode=true;
+    collectDom();
+    stopMenuMusic();
+    try{ window.jcSfx?.stopAll?.(); }catch(error){}
+    onlineMode=true;
     if(dom.modal)dom.modal.hidden=true;
     if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true;
-    dom.menuScreen?.classList.remove('active');
-    dom.gameScreen?.classList.add('active');
-    document.body.classList.add('onlineGameActive');
-    window.scrollTo?.(0,0);
+    ensureOnlineTableVisible();
     renderOnlineGame();
   }
   function unfinishedUids(game){ const fin=new Set(game.finishedOrder||[]); return (game.turnOrder||[]).filter(uid=>!fin.has(uid)); }
@@ -754,7 +804,7 @@
         }
       }catch(e){console.warn(e);}
     }
-    detachRoom(); currentRoomCode=''; currentRoom=null; currentPlayers=[]; currentHand=[]; onlineMode=false; selectedCardIds.clear(); renderLobby(); if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true; setStatus('Você saiu da sala.','ok');
+    detachRoom(); currentRoomCode=''; currentRoom=null; currentPlayers=[]; currentHand=[]; onlineMode=false; selectedCardIds.clear(); collectDom(); if(dom.menuScreen){dom.menuScreen.style.display=''; dom.menuScreen.removeAttribute('aria-hidden'); dom.menuScreen.classList.add('active');} if(dom.gameScreen){dom.gameScreen.style.display=''; dom.gameScreen.classList.remove('active');} document.body.classList.remove('onlineGameActive'); document.documentElement.classList.remove('onlineGameActive'); renderLobby(); if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true; setStatus('Você saiu da sala.','ok');
   }
   async function copyRoomCode(){ if(!currentRoomCode)return; try{await navigator.clipboard.writeText(currentRoomCode); setStatus(`Código ${currentRoomCode} copiado.`,'ok');}catch(e){setStatus(`Código da sala: ${currentRoomCode}`,'ok');}}
 
@@ -779,11 +829,11 @@
   window.addEventListener('beforeunload',()=>{if(currentRoomCode&&currentUser)playerRef(currentRoomCode,currentUser.uid).set({connected:false,lastSeen:ts()},{merge:true});});
 
   window.setInterval(() => {
-    forceEnterIfStarted('global-watch');
+    forceSyncStartedRoom('global-watch');
     if(isHost() && currentRoom?.game?.phase === 'playing'){
       scheduleBotIfNeeded('global-watch');
     }
   }, 900);
 
-  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom};
+  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom,forceEnterIfStarted,forceSyncStartedRoom};
 })();
