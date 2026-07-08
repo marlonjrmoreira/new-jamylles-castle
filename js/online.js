@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.1: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.3: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -214,7 +214,22 @@
   function attachRoom(code){
     detachRoom(); currentRoomCode=code;
     if(dom.homeLobbyPanel) dom.homeLobbyPanel.hidden=false; if(dom.lobby) dom.lobby.hidden=false; if(dom.bridgeNote) dom.bridgeNote.hidden=true; if(dom.lobbyTitle) dom.lobbyTitle.textContent=`Sala ${code}`;
-    roomUnsub=roomRef(code).onSnapshot(s=>{ currentRoom=s.exists?s.data():null; if(!currentRoom){setStatus('A sala foi encerrada.','error');detachRoom();renderLobby();return;} if(shouldEnterGame(currentRoom)){ forceEnterIfStarted('room-snapshot'); return; } renderLobby(); renderOnlineGame(); if(isHost()) setupHostActionListener(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler a sala: ${e.message}`,'error'));
+    roomUnsub=roomRef(code).onSnapshot(s=>{
+      currentRoom=s.exists?s.data():null;
+      if(!currentRoom){setStatus('A sala foi encerrada.','error');detachRoom();renderLobby();return;}
+      if(shouldEnterGame(currentRoom)){
+        forceEnterIfStarted('room-snapshot');
+        renderOnlineGame();
+        if(isHost()){
+          setupHostActionListener();
+          scheduleBotIfNeeded('room-snapshot');
+        }
+        return;
+      }
+      renderLobby(); renderOnlineGame();
+      if(isHost()) setupHostActionListener();
+      if(isHost()) scheduleBotIfNeeded('room-lobby');
+    }, e=>setStatus(`Erro ao ler a sala: ${e.message}`,'error'));
     playersUnsub=roomRef(code).collection('players').orderBy('joinedAt','asc').onSnapshot(s=>{
       currentPlayers=s.docs.map(d=>({id:d.id,...d.data()}));
       const me=currentPlayers.find(p=>p.uid===currentUser?.uid);
@@ -222,16 +237,26 @@
       if(me && !me.isHost && !me.isBot && currentRoom?.phase==='lobby' && me.ready!==true){
         playerRef(code,currentUser.uid).set({ready:true,lastSeen:ts()},{merge:true}).catch(console.warn);
       }
-      if(currentRoom && shouldEnterGame(currentRoom)){ forceEnterIfStarted('players-snapshot'); return; }
-      renderLobby(); renderOnlineGame(); if(isHost()) scheduleBotIfNeeded();
+      if(currentRoom && shouldEnterGame(currentRoom)){
+        forceEnterIfStarted('players-snapshot');
+        renderOnlineGame();
+        if(isHost()) scheduleBotIfNeeded('players-snapshot');
+        return;
+      }
+      renderLobby(); renderOnlineGame(); if(isHost()) scheduleBotIfNeeded('players-lobby');
     }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
-    handUnsub=handRef(code,currentUser.uid).onSnapshot(s=>{ currentHand=s.exists?sortCards(s.data().cards||[]):[]; if(s.exists && currentRoom && shouldEnterGame(currentRoom)) forceEnterIfStarted('hand-snapshot'); renderOnlineGame(); }, ()=>{});
+    handUnsub=handRef(code,currentUser.uid).onSnapshot(s=>{
+      currentHand=s.exists?sortCards(s.data().cards||[]):[];
+      if(s.exists && currentRoom && shouldEnterGame(currentRoom)) forceEnterIfStarted('hand-snapshot');
+      renderOnlineGame();
+      if(isHost()) scheduleBotIfNeeded('hand-snapshot');
+    }, ()=>{});
     heartbeatTimer=window.setInterval(()=>{ if(currentRoomCode&&currentUser) playerRef(currentRoomCode,currentUser.uid).set({connected:true,lastSeen:ts()},{merge:true}).catch(console.warn); },15000);
     startTransitionWatcher();
   }
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.1: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.3: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -367,6 +392,7 @@
     if(dom.ruleHint)dom.ruleHint.textContent=game.tableCombo?`Vença: ${desc(game.tableCombo)}`:'Mesa livre: jogue uma ou mais cartas do mesmo valor.';
     playOnlineSfx(game); renderPlayers(game); renderTable(game); renderHistory(game); renderHand(isMyTurn); renderControls(isMyTurn,reason,selected);
     if(game.phase==='finished')renderFinish(game);
+    if(isHost()) scheduleBotIfNeeded('render-online-game');
   }
   function playOnlineSfx(game){
     if(!game) return;
@@ -442,7 +468,7 @@
     if(!isHost()||!currentRoom?.game)return; const game=clone(currentRoom.game); if(uid!==game.turnUid||!game.tableCombo)return;
     const player=currentPlayers.find(p=>p.uid===uid); game.passes={...(game.passes||{}),[uid]:true}; game.turnCounter=Number(game.turnCounter||0)+1; game.history=[...(game.history||[]),{type:'pass',playerUid:uid,playerName:player?.name||'Jogador',turn:game.turnCounter}].slice(-40); game.lastMessage=`${player?.name||'Jogador'} passou.`;
     const challengers=unfinishedUids(game).filter(x=>x!==game.tableOwnerUid); const everyone=challengers.length===0||challengers.every(x=>game.passes?.[x]); const batch=db.batch();
-    if(everyone){batch.set(roomRef(currentRoomCode),{game,publicMessage:'A corte observa a última jogada antes da mesa limpar.',updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); window.setTimeout(()=>hostClear(game.tableOwnerUid),850); return;}
+    if(everyone){batch.set(roomRef(currentRoomCode),{game,publicMessage:'A corte observa a última jogada antes da mesa limpar.',updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,game}; window.setTimeout(()=>hostClear(game.tableOwnerUid),850); return;}
     game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,game}; window.setTimeout(scheduleBotIfNeeded, 220);
   }
   async function hostClear(ownerUid){
@@ -453,57 +479,209 @@
     if(game.phase !== 'finished') sfx('tableClear', 'normal');
     await roomRef(currentRoomCode).set({game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); currentRoom={...currentRoom,phase:game.phase,game}; window.setTimeout(scheduleBotIfNeeded, 220);
   }
-  function scheduleBotIfNeeded(){
-    window.clearTimeout(botTimer);
+  function scheduleBotIfNeeded(reason=''){
     if(!isHost() || !currentRoomCode) return;
-    botTimer = window.setTimeout(() => runBotTurn('scheduled'), 520 + Math.floor(Math.random()*520));
+    if(botTimer) return;
+    botTimer = window.setTimeout(async () => {
+      botTimer = null;
+      await runBotAutonomy(reason || 'scheduled');
+    }, 420 + Math.floor(Math.random()*480));
   }
 
-  async function runBotTurn(reason=''){
+  async function runBotAutonomy(reason=''){
+    // Importante: em GitHub Pages não existe servidor sempre ligado.
+    // O navegador do anfitrião apenas executa o motor da sala.
+    // A decisão da carta é da IA do bot, não do jogador anfitrião.
     if(botBusy || !isHost() || !currentRoomCode) return;
     botBusy = true;
     try{
       const roomSnap = await roomRef(currentRoomCode).get();
       if(!roomSnap.exists) return;
-      const room = roomSnap.data();
-      const game = room?.game;
-      currentRoom = {...currentRoom, ...room};
-      if(!game || game.phase !== 'playing') return;
+
+      const room = roomSnap.data() || {};
+      const game = clone(room.game || {});
+      currentRoom = {...currentRoom, ...room, game};
+
+      if(game.phase !== 'playing') return;
 
       const uid = game.turnUid || '';
       const player = currentPlayers.find(p => p.uid === uid);
       const isBotTurn = String(uid).startsWith('bot-') || player?.isBot === true;
       if(!isBotTurn) return;
 
-      const handSnap = await handRef(currentRoomCode, uid).get();
-      const hand = handSnap.exists ? sortCards(handSnap.data().cards || []) : [];
+      const move = await botDecideMove(uid, game);
+      if(!move) return;
 
-      if(!hand.length){
-        await hostAutoFinishEmptyBot(uid, game);
-        return;
-      }
-
-      const cards = botChoice(hand, game.tableCombo);
-      if(cards.length){
-        await hostPlay(uid, cards.map(c => c.id));
-      }else if(game.tableCombo){
-        await hostPass(uid);
-      }else{
-        // Mesa livre e sem escolha não deveria acontecer, mas evita travar.
-        await hostPlay(uid, [hand[0].id]);
-      }
+      await applyBotMove(uid, move, game);
     }catch(error){
-      console.warn('Erro no bot online:', error);
-      setStatus(`Erro no bot: ${error.message || error}`, 'error');
+      console.warn('Erro na autonomia do bot:', error);
+      setStatus(`Erro na IA do bot: ${error.message || error}`, 'error');
     }finally{
       botBusy = false;
+      if(isHost() && currentRoom?.game?.phase === 'playing'){
+        const uid = currentRoom.game.turnUid || '';
+        const isBotTurn = String(uid).startsWith('bot-') || currentPlayers.find(p=>p.uid===uid)?.isBot;
+        if(isBotTurn) scheduleBotIfNeeded('bot-chain');
+      }
     }
   }
 
-  async function hostAutoFinishEmptyBot(uid, sourceGame){
+  async function botDecideMove(uid, game){
+    const handSnap = await handRef(currentRoomCode, uid).get();
+    const hand = handSnap.exists ? sortCards(handSnap.data().cards || []) : [];
+    const bot = currentPlayers.find(p => p.uid === uid);
+    const name = bot?.name || 'Bot';
+
+    if(!hand.length){
+      return {type:'finish-empty', reason:`${name} não tem cartas.`};
+    }
+
+    const cards = botChooseCards(hand, game.tableCombo);
+    if(cards.length){
+      return {
+        type:'play',
+        cardIds:cards.map(c => c.id),
+        cards,
+        reason:botExplainChoice(cards, game.tableCombo)
+      };
+    }
+
+    if(game.tableCombo){
+      return {type:'pass', reason:`${name} não tem combinação maior.`};
+    }
+
+    // Mesa livre: sempre joga a carta/grupo mais baixo disponível.
+    return {type:'play', cardIds:[hand[0].id], cards:[hand[0]], reason:`${name} iniciou com a menor carta.`};
+  }
+
+  async function applyBotMove(uid, move, sourceGame){
+    if(!move || !uid) return;
+    if(move.type === 'play') return applyBotPlay(uid, move.cardIds || [], sourceGame, move.reason || '');
+    if(move.type === 'pass') return applyBotPass(uid, sourceGame, move.reason || '');
+    if(move.type === 'finish-empty') return applyBotEmptyHand(uid, sourceGame);
+  }
+
+  async function applyBotPlay(uid, cardIds, sourceGame, reason=''){
+    if(!isHost() || !currentRoomCode) return;
+    const game = clone(sourceGame || currentRoom?.game || {});
+    if(game.phase !== 'playing' || uid !== game.turnUid) return;
+
+    const handSnap = await handRef(currentRoomCode, uid).get();
+    const hand = handSnap.exists ? sortCards(handSnap.data().cards || []) : [];
+    const ids = new Set(cardIds || []);
+    const selected = hand.filter(c => ids.has(c.id));
+
+    if(!canPlay(selected, game.tableCombo)){
+      // Se a IA calculou algo que ficou inválido por mudança de estado,
+      // ela passa em mesa ocupada ou tenta menor carta em mesa livre.
+      if(game.tableCombo) return applyBotPass(uid, game, 'Jogada recalculada como passe.');
+      if(hand.length) return applyBotPlay(uid, [hand[0].id], game, 'Recalculado para carta mínima.');
+      return applyBotEmptyHand(uid, game);
+    }
+
+    const player = currentPlayers.find(p => p.uid === uid);
+    const remaining = hand.filter(c => !ids.has(c.id));
+    const combo = {
+      power:Number(selected[0].power),
+      count:selected.length,
+      cards:selected.map(c => ({...c})),
+      playerUid:uid,
+      playerName:player?.name || 'Bot',
+      turn:Number(game.turnCounter || 0) + 1,
+      ai:true,
+      aiReason:reason || ''
+    };
+
+    game.turnCounter = combo.turn;
+    game.tableCombo = combo;
+    game.tableOwnerUid = uid;
+    game.passes = {};
+    game.history = [
+      ...(game.history || []),
+      {type:'play', playerUid:uid, playerName:combo.playerName, description:desc(combo), turn:combo.turn, ai:true}
+    ].slice(-40);
+    game.lastMessage = `${combo.playerName} jogou ${desc(combo)}.`;
+
+    if(remaining.length === 0 && !(game.finishedOrder || []).includes(uid)){
+      game.finishedOrder = [...(game.finishedOrder || []), uid];
+      game.lastMessage += ` ${combo.playerName} acabou as cartas!`;
+    }
+
+    const batch = db.batch();
+    batch.set(handRef(currentRoomCode, uid), {cards:sortCards(remaining), updatedAt:ts()}, {merge:true});
+    batch.set(playerRef(currentRoomCode, uid), {
+      cardCount:remaining.length,
+      lastAiMoveAt:ts(),
+      lastAiReason:reason || ''
+    }, {merge:true});
+
+    const unfinished = unfinishedUids(game);
+    if(unfinished.length <= 1){
+      if(unfinished[0] && !game.finishedOrder.includes(unfinished[0])) game.finishedOrder.push(unfinished[0]);
+      game.phase = 'finished';
+      game.turnUid = '';
+      game.lastMessage = 'Fim da partida online!';
+    }else if(isBreaker(combo)){
+      batch.set(roomRef(currentRoomCode), {game, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+      await batch.commit();
+      currentRoom = {...currentRoom, game};
+      window.setTimeout(() => hostClear(uid), 850);
+      return;
+    }else{
+      game.turnUid = nextUid(game, uid, false);
+      game.turnName = currentPlayers.find(p => p.uid === game.turnUid)?.name || '';
+    }
+
+    batch.set(roomRef(currentRoomCode), {game, phase:game.phase, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    await batch.commit();
+    currentRoom = {...currentRoom, phase:game.phase, game};
+    scheduleBotIfNeeded('after-bot-play');
+  }
+
+  async function applyBotPass(uid, sourceGame, reason=''){
+    if(!isHost() || !currentRoomCode) return;
+    const game = clone(sourceGame || currentRoom?.game || {});
+    if(game.phase !== 'playing' || uid !== game.turnUid || !game.tableCombo) return;
+
+    const player = currentPlayers.find(p => p.uid === uid);
+    game.passes = {...(game.passes || {}), [uid]:true};
+    game.turnCounter = Number(game.turnCounter || 0) + 1;
+    game.history = [
+      ...(game.history || []),
+      {type:'pass', playerUid:uid, playerName:player?.name || 'Bot', turn:game.turnCounter, ai:true}
+    ].slice(-40);
+    game.lastMessage = `${player?.name || 'Bot'} passou.`;
+
+    const challengers = unfinishedUids(game).filter(x => x !== game.tableOwnerUid);
+    const everyone = challengers.length === 0 || challengers.every(x => game.passes?.[x]);
+    const batch = db.batch();
+    batch.set(playerRef(currentRoomCode, uid), {lastAiMoveAt:ts(), lastAiReason:reason || ''}, {merge:true});
+
+    if(everyone){
+      batch.set(roomRef(currentRoomCode), {game, publicMessage:'A corte observa a última jogada antes da mesa limpar.', updatedAt:ts()}, {merge:true});
+      await batch.commit();
+      currentRoom = {...currentRoom, game};
+      window.setTimeout(() => hostClear(game.tableOwnerUid), 850);
+      return;
+    }
+
+    game.turnUid = nextUid(game, uid, false);
+    game.turnName = currentPlayers.find(p => p.uid === game.turnUid)?.name || '';
+
+    batch.set(roomRef(currentRoomCode), {game, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    await batch.commit();
+    currentRoom = {...currentRoom, game};
+    scheduleBotIfNeeded('after-bot-pass');
+  }
+
+  async function applyBotEmptyHand(uid, sourceGame){
     const game = clone(sourceGame || currentRoom?.game || {});
     if(!uid || game.phase !== 'playing') return;
-    if(!(game.finishedOrder || []).includes(uid)) game.finishedOrder = [...(game.finishedOrder || []), uid];
+
+    if(!(game.finishedOrder || []).includes(uid)){
+      game.finishedOrder = [...(game.finishedOrder || []), uid];
+    }
+
     const unfinished = unfinishedUids(game);
     if(unfinished.length <= 1){
       if(unfinished[0] && !game.finishedOrder.includes(unfinished[0])) game.finishedOrder.push(unfinished[0]);
@@ -515,12 +693,55 @@
       game.turnName = currentPlayers.find(p => p.uid === game.turnUid)?.name || '';
       game.lastMessage = `${currentPlayers.find(p => p.uid === uid)?.name || 'Bot'} terminou as cartas.`;
     }
+
     await roomRef(currentRoomCode).set({game, phase:game.phase, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
     currentRoom = {...currentRoom, phase:game.phase, game};
-    window.setTimeout(scheduleBotIfNeeded, 220);
+    scheduleBotIfNeeded('after-empty-bot');
   }
 
-  function botChoice(hand,table){ const g=new Map(); hand.forEach(c=>{const p=Number(c.power); if(!g.has(p))g.set(p,[]); g.get(p).push(c);}); const cand=[]; g.forEach((cards,p)=>{if(!table)cand.push(cards.slice(0,1)); else if(cards.length>=table.count&&Number(p)>Number(table.power))cand.push(cards.slice(0,table.count));}); if(!cand.length)return[]; cand.sort((a,b)=>Number(a[0].power)-Number(b[0].power)||a.length-b.length); if(table){const nb=cand.filter(c=>Number(c[0].power)<cardPower('2')); if(nb.length)return nb[0];} return cand[0];}
+  function botChooseCards(hand, table){
+    const groups = new Map();
+    hand.forEach(card => {
+      const power = Number(card.power);
+      if(!groups.has(power)) groups.set(power, []);
+      groups.get(power).push(card);
+    });
+
+    const candidates = [];
+    groups.forEach((cards, power) => {
+      const sorted = sortCards(cards);
+      if(!table){
+        // Mesa livre: prefere uma carta só para preservar pares/trincas.
+        candidates.push(sorted.slice(0, 1));
+      }else if(sorted.length >= Number(table.count) && power > Number(table.power)){
+        candidates.push(sorted.slice(0, Number(table.count)));
+      }
+    });
+
+    if(!candidates.length) return [];
+
+    candidates.sort((a,b) => {
+      const pa = Number(a[0].power);
+      const pb = Number(b[0].power);
+      return pa - pb || a.length - b.length;
+    });
+
+    // Evita gastar 2/coringa se houver jogada menor suficiente.
+    if(table){
+      const normal = candidates.filter(cards => Number(cards[0].power) < cardPower('2'));
+      if(normal.length) return normal[0];
+    }
+
+    return candidates[0];
+  }
+
+  function botExplainChoice(cards, table){
+    if(!cards?.length) return 'Sem cartas escolhidas.';
+    const label = cards[0].valueStr || '?';
+    if(!table) return `Iniciou a rodada com ${cards.length} carta(s) de ${label}.`;
+    return `Cobriu ${table.count} carta(s) de ${table.cards?.[0]?.valueStr || '?'} com ${cards.length} carta(s) de ${label}.`;
+  }
+
   async function leaveRoom(){
     if(currentRoomCode&&currentUser){
       try{
@@ -559,8 +780,10 @@
 
   window.setInterval(() => {
     forceEnterIfStarted('global-watch');
-    if(isHost() && currentRoom?.game?.phase === 'playing') scheduleBotIfNeeded();
-  }, 1400);
+    if(isHost() && currentRoom?.game?.phase === 'playing'){
+      scheduleBotIfNeeded('global-watch');
+    }
+  }, 900);
 
   window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom};
 })();

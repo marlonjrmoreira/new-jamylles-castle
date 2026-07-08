@@ -287,3 +287,23 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - Após jogadas, passes e limpeza da mesa, o próximo bot é agendado novamente.
 - Adicionada proteção para bot sem cartas não travar a partida.
 - Sem mudanças nas Rules do Firebase.
+
+
+## v0.7.2
+- Segunda correção do motor de bots online.
+- A entrada na mesa não interrompe mais o acionamento dos bots.
+- O anfitrião agenda bots também em snapshots da sala, jogadores, mão e renderização da mesa.
+- O motor dos bots agora lê o estado mais recente diretamente do Firestore antes de jogar.
+- Jogada/passe do bot usam o estado fresco da sala para evitar travamento por estado local antigo.
+- Sem mudanças nas Rules do Firebase.
+
+
+## v0.7.3
+- Reestruturada a lógica dos bots para separar decisão da IA e aplicação da jogada.
+- Bots não usam mais a função de jogada humana/anfitrião como se fossem o anfitrião.
+- Nova arquitetura:
+  - `runBotAutonomy()` verifica se a vez é de bot.
+  - `botDecideMove()` decide autonomamente a jogada.
+  - `applyBotMove()` aplica a decisão no estado da sala.
+- O navegador do anfitrião atua apenas como processador temporário da sala em GitHub Pages, não como controlador do bot.
+- Mantida compatibilidade com Firebase atual, sem necessidade de mudar Rules.
