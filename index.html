@@ -39,8 +39,10 @@
             <div class="vignette"></div>
 
             <section class="menuOverlay">
-                <h1 class="gameTitle">Jamylle's Castle</h1>
-                <p class="menuSubtitle">A corte das cartas</p>
+                <div class="heroHeader">
+                    <h1 class="gameTitle">Jamylle's Castle</h1>
+                    <p class="menuSubtitle">A corte das cartas</p>
+                </div>
                 <div class="setupPanel" aria-label="Configuração da sala">
                     <label>
                         Seu nome
@@ -86,13 +88,13 @@
                         </select>
                     </label>
                 </div>
-                <div class="roomMenuActions">
-                    <button class="menuButton" data-online-action="create-room" type="button">Criar sala</button>
-                    <button class="menuButton secondary" data-online-action="join-room" type="button">Buscar / entrar na sala</button>
+                <div class="menuActionGrid" aria-label="Ações principais">
+                    <button class="menuButton primaryAction" data-online-action="create-room" type="button">Criar sala</button>
+                    <button class="menuButton primaryAction" data-online-action="join-room" type="button">Entrar na sala</button>
+                    <button class="menuButton secondary compact" data-action="observer-preview" type="button">Observar</button>
+                    <button class="menuButton secondary compact" data-action="rules" type="button">Regras</button>
                 </div>
-                <button class="menuButton secondary" data-action="observer-preview">Prévia Observador Seguro</button>
-                <button class="menuButton secondary" data-action="rules">Regras</button>
-                <span class="versionTag">v0.5.3 — partida online</span>
+                <span class="versionTag">v0.5.4 — menu refinado</span>
             </section>
         </div>
     </main>

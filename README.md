@@ -153,3 +153,12 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - Bots da sala são adicionados e controlados pelo host.
 - Ranking online básico ao final.
 - Novas regras Firestore em `docs/FIREBASE_SETUP.md`.
+
+
+## v0.5.4
+- Refinamento visual da tela inicial.
+- Subtítulo “A corte das cartas” com fundo e contraste muito mais legíveis.
+- Botões reorganizados em grade 2x2 mais equilibrada para mobile.
+- Rótulo “Prévia Observador Seguro” simplificado para “Observar”.
+- Botões menores, mais alinhados e com melhor contraste.
+- Mantida a lógica existente do multiplayer e do menu online.
