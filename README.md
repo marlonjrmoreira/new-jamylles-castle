@@ -206,3 +206,30 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - O botão `Estou pronto` fica no topo do lobby, antes da lista de jogadores e da voz.
 - Para não anfitriões, o botão `Iniciar partida` fica oculto.
 - Mensagem do lobby agora orienta claramente: jogador clica em `Estou pronto`; anfitrião clica em `Iniciar partida`.
+
+
+## v0.6.3
+- Removido o lobby em modal/janela separada.
+- Lobby agora aparece diretamente na tela inicial, dentro de `Sala atual`.
+- Criar sala e entrar em sala passam a abrir o lobby no mesmo lugar.
+- Convidado vê o botão grande `Estou pronto` sem precisar procurar em outra tela.
+- Anfitrião vê apenas `Iniciar partida`, sem botão de pronto.
+- Adicionado reforço automático para levar convidados à mesa se a sala mudar para `playing`.
+- Interface de lobby simplificada para reduzir confusão entre configurar, entrar e dar pronto.
+
+
+## v0.6.4
+- Anfitrião agora vê claramente quais convidados ainda não deram pronto.
+- O botão `Iniciar partida` fica bloqueado enquanto houver convidado sem pronto.
+- Lista de jogadores mostra estados: Host, Convidado/Bot, Pronto/Falta pronto.
+- Convidado recebe orientação direta para tocar em `Estou pronto`.
+- A voz tenta ativar automaticamente ao criar ou entrar em uma sala.
+- Se o navegador bloquear o microfone, o botão `Entrar na voz` continua disponível.
+
+
+## v0.6.5
+- Otimizado o fluxo de microfone para iOS/Chrome/Safari.
+- Ao clicar em `Criar sala` ou `Entrar em sala`, o jogo já tenta preparar o microfone.
+- A solicitação de permissão acontece associada ao gesto do usuário, reduzindo bloqueios em navegadores móveis.
+- Se a permissão for bloqueada, o botão `Entrar na voz` continua disponível.
+- Textos do lobby orientam o jogador a autorizar o microfone antes de dar pronto.

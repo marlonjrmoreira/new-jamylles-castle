@@ -90,11 +90,53 @@
                 </div>
                 <div class="menuActionGrid" aria-label="Ações principais">
                     <button class="menuButton primaryAction" data-online-action="create-room" type="button">Criar sala</button>
-                    <button class="menuButton primaryAction" data-online-action="join-room" type="button">Entrar na sala</button>
+                    <button class="menuButton primaryAction" data-online-action="join-room" type="button">Entrar em sala</button>
                     <button class="menuButton secondary compact" data-action="observer-preview" type="button">Observar</button>
                     <button class="menuButton secondary compact" data-action="rules" type="button">Regras</button>
                 </div>
-                <span class="versionTag">v0.6.2 — lobby claro</span>
+
+                <section id="homeLobbyPanel" class="homeLobbyPanel" hidden aria-label="Sala atual">
+                    <div class="homeLobbyTop">
+                        <div>
+                            <span class="homeLobbyKicker">Sala atual</span>
+                            <strong id="onlineLobbyTitle">Sala</strong>
+                        </div>
+                        <button class="miniButton" data-online-action="copy-room" type="button">Copiar código</button>
+                    </div>
+
+                    <div class="onlineStatus" id="onlineStatus">Conectando ao Firebase...</div>
+                    <div id="onlineBridgeNote" class="onlineBridgeNote">Crie uma sala ou entre em uma sala existente para abrir o lobby.</div>
+
+                    <div id="onlineLobby" class="onlineLobby" hidden>
+                        <div class="modalActions onlineActions lobbyPrimaryActions">
+                            <button class="menuButton readyAction" data-online-action="toggle-ready" type="button" id="readyButton">Estou pronto</button>
+                            <button class="menuButton hostStartAction" data-online-action="start-online" type="button" id="startOnlineButton" disabled>Iniciar partida</button>
+                            <button class="menuButton secondary leaveAction" data-online-action="leave-room" type="button">Sair da sala</button>
+                        </div>
+
+                        <p class="onlineHint lobbyInstruction">
+                            Convidado: autorize o microfone e clique em <strong>Estou pronto</strong>. Anfitrião: clique em <strong>Iniciar partida</strong>.
+                        </p>
+
+                        <div id="onlinePlayersList" class="onlinePlayersList"></div>
+
+                        <section id="voicePanel" class="voicePanel" hidden>
+                            <div class="voiceHeader">
+                                <strong>Voz da sala</strong>
+                                <span class="voiceStatus">Fora da voz</span>
+                            </div>
+                            <div class="voiceActions">
+                                <button class="miniButton voiceJoinButton" data-voice-action="join" type="button">Entrar na voz</button>
+                                <button class="miniButton voiceMuteButton" data-voice-action="mute" type="button" disabled>Mutar</button>
+                                <button class="miniButton voiceLeaveButton" data-voice-action="leave" type="button" disabled>Sair</button>
+                            </div>
+                            <div class="voiceParticipantList" aria-label="Participantes na voz"></div>
+                            <p class="onlineHint voiceHint">Autorize o microfone quando o navegador pedir. Jogadores podem falar; observadores falam se o anfitrião permitir.</p>
+                        </section>
+                    </div>
+                </section>
+
+                <span class="versionTag">v0.6.5 — microfone iOS</span>
             </section>
         </div>
     </main>
@@ -169,55 +211,6 @@
             </div>
         </div>
     </div>
-
-
-    <div id="onlineModal" class="modal onlineModal" hidden>
-        <div class="modalCard onlineCard">
-            <span class="drawLabel">Multiplayer</span>
-            <h2>Lobby da Sala</h2>
-            <p class="tradePrivacy">Os dados da sala agora ficam apenas na tela inicial. Este painel serve só para acompanhar o lobby, copiar o código e iniciar a partida.</p>
-
-            <div class="onlineStatus" id="onlineStatus">Conectando ao Firebase...</div>
-            <div class="onlineBridgeNote">Configure nome, sala, senha e demais opções na tela inicial.
-            </div>
-
-            <section id="onlineLobby" class="onlineLobby" hidden>
-                <div class="onlineLobbyHeader">
-                    <strong id="onlineLobbyTitle">Sala</strong>
-                    <button class="miniButton" data-online-action="copy-room" type="button">Copiar código</button>
-                </div>
-                <div id="onlinePlayersList" class="onlinePlayersList"></div>
-
-                <section id="voicePanel" class="voicePanel" hidden>
-                    <div class="voiceHeader">
-                        <strong>Voz da sala</strong>
-                        <span class="voiceStatus">Fora da voz</span>
-                    </div>
-                    <div class="voiceActions">
-                        <button class="miniButton voiceJoinButton" data-voice-action="join" type="button">Entrar na voz</button>
-                        <button class="miniButton voiceMuteButton" data-voice-action="mute" type="button" disabled>Mutar</button>
-                        <button class="miniButton voiceLeaveButton" data-voice-action="leave" type="button" disabled>Sair</button>
-                    </div>
-                    <div class="voiceParticipantList" aria-label="Participantes na voz"></div>
-                    <p class="onlineHint voiceHint">Jogadores podem falar. Observadores falam apenas se o anfitrião permitir.</p>
-                </section>
-                <div class="modalActions onlineActions">
-                    <button class="menuButton secondary" data-online-action="toggle-ready" type="button" id="readyButton">Estou pronto</button>
-                    <button class="menuButton" data-online-action="start-online" type="button" id="startOnlineButton" disabled>Iniciar partida</button>
-                    <button class="menuButton secondary" data-online-action="leave-room" type="button">Sair da sala</button>
-                </div>
-                <p class="onlineHint">
-                    v0.5.5 mantém o lobby mais limpo, reaproveita salas antigas automaticamente e preserva a entrada direta pela tela inicial.
-                </p>
-            </section>
-
-            <div class="modalActions">
-                <button class="menuButton secondary" data-online-action="close-online" type="button">Fechar</button>
-            </div>
-        </div>
-    </div>
-
-
 
     <div id="voiceDock" class="voiceDock" hidden>
         <div class="voiceHeader">

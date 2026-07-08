@@ -1,4 +1,4 @@
-/* Jamylle's Castle v0.6.0 — Chat de voz WebRTC
+/* Jamylle's Castle v0.6.5 — Chat de voz WebRTC
    Usa Firebase como sinalização e WebRTC para áudio P2P.
 */
 (() => {
@@ -33,6 +33,8 @@
     let signalsUnsub = null;
     let heartbeatTimer = null;
     let uiTimer = null;
+    let lastAutoJoinRoom = '';
+    let micPrimePromise = null;
 
     const dom = {};
 
@@ -69,6 +71,44 @@
 
     function serverTimestamp(){
         return firebase.firestore.FieldValue.serverTimestamp();
+    }
+
+    function microphoneConstraints(){
+        return {
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: false
+        };
+    }
+
+    async function primeMicrophone(options = {}){
+        if(localStream) return localStream;
+        if(micPrimePromise) return micPrimePromise;
+        if(!navigator.mediaDevices?.getUserMedia){
+            status('Microfone não disponível neste navegador');
+            return null;
+        }
+
+        status('Autorize o microfone no navegador');
+        micPrimePromise = navigator.mediaDevices.getUserMedia(microphoneConstraints())
+            .then(stream => {
+                localStream = stream;
+                muted = false;
+                status('Microfone autorizado');
+                updatePanels();
+                return stream;
+            })
+            .catch(error => {
+                console.warn('Permissão de microfone negada ou bloqueada:', error);
+                micPrimePromise = null;
+                status('Clique em Entrar na voz e autorize o microfone');
+                return null;
+            });
+
+        return micPrimePromise;
     }
 
     function roomRef(){
@@ -200,23 +240,16 @@
         }
 
         if(canSpeak()){
-            try{
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    },
-                    video: false
-                });
-            }catch(error){
-                console.error(error);
+            localStream = localStream || await primeMicrophone({ reason: 'join-voice' });
+            if(!localStream){
                 status('Microfone bloqueado');
                 return;
             }
         }else{
-            localStream = null;
             muted = true;
+            if(localStream){
+                localStream.getAudioTracks().forEach(track => track.enabled = false);
+            }
         }
 
         joined = true;
@@ -563,6 +596,21 @@
         });
     }
 
+
+    async function autoJoinFromRoomEvent(event){
+        const code = event?.detail?.roomCode || getRoomCode();
+        if(!code || joined || lastAutoJoinRoom === code) return;
+        lastAutoJoinRoom = code;
+        status('Ativando voz...');
+        try{
+            if(code !== roomCode) await bindRoom(code);
+            await joinVoice();
+        }catch(error){
+            console.warn('Entrada automática na voz falhou:', error);
+            status('Clique em Entrar na voz');
+        }
+    }
+
     document.addEventListener('click', event => {
         const button = event.target.closest('[data-voice-action]');
         if(!button) return;
@@ -571,6 +619,8 @@
         if(action === 'mute') toggleMute();
         if(action === 'leave') leaveVoice();
     });
+
+    window.addEventListener('jc:auto-voice', autoJoinFromRoomEvent);
 
     window.addEventListener('beforeunload', () => {
         if(joined && roomCode && currentUser){
@@ -598,6 +648,7 @@
     });
 
     window.jcVoice = {
+        prime: primeMicrophone,
         join: joinVoice,
         leave: leaveVoice,
         mute: toggleMute,

@@ -512,3 +512,153 @@ button:disabled{cursor:not-allowed; opacity:.55}
         grid-column:1 / -1;
     }
 }
+
+
+/* === v0.6.3 — Lobby direto na tela inicial === */
+.homeLobbyPanel{
+    width:min(100%,392px);
+    display:grid;
+    gap:9px;
+    padding:11px;
+    border:1px solid rgba(255,231,168,.40);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(7,1,19,.76), rgba(7,1,19,.58));
+    box-shadow:0 16px 42px rgba(0,0,0,.38), inset 0 0 18px rgba(255,231,168,.06);
+    backdrop-filter:blur(6px);
+}
+.homeLobbyPanel[hidden]{display:none;}
+.homeLobbyTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    text-align:left;
+}
+.homeLobbyTop strong{
+    display:block;
+    color:var(--gold-strong);
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-size:18px;
+    line-height:1;
+}
+.homeLobbyKicker{
+    display:block;
+    margin-bottom:3px;
+    color:rgba(255,247,223,.58);
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:1.4px;
+}
+#menuScreen .homeLobbyPanel .onlineStatus{
+    margin:0;
+    font-size:12px;
+    padding:8px 10px;
+}
+#menuScreen .homeLobbyPanel .onlineLobby{
+    margin:0;
+    padding:0;
+    border:0;
+    background:transparent;
+}
+#menuScreen .homeLobbyPanel .onlineBridgeNote{
+    margin:0;
+    padding:8px 10px;
+    font-size:11px;
+}
+#menuScreen .homeLobbyPanel .lobbyPrimaryActions{
+    margin:0;
+    gap:8px;
+}
+#menuScreen .homeLobbyPanel .lobbyPrimaryActions .menuButton{
+    min-height:42px;
+}
+#menuScreen .homeLobbyPanel .onlinePlayersList{
+    margin:0;
+    gap:6px;
+}
+#menuScreen .homeLobbyPanel .onlinePlayerRow{
+    padding:8px 10px;
+    border-radius:12px;
+}
+#menuScreen .homeLobbyPanel .voicePanel{
+    margin-top:0;
+    padding:9px;
+}
+#menuScreen .homeLobbyPanel .lobbyInstruction{
+    margin:0;
+    padding:7px 9px;
+    border:1px solid rgba(255,231,168,.14);
+    border-radius:12px;
+    background:rgba(0,0,0,.18);
+    font-size:11px;
+}
+#menuScreen .homeLobbyPanel .hostStartAction[hidden],
+#menuScreen .homeLobbyPanel .readyAction[hidden]{
+    display:none;
+}
+#menuScreen .homeLobbyPanel .leaveAction{
+    min-height:36px;
+}
+@media (max-height:820px){
+    #menuScreen .homeLobbyPanel{
+        max-height:33dvh;
+        overflow:auto;
+    }
+}
+
+
+/* === v0.6.4 — prontos visíveis e voz automática === */
+.readyGuide{
+    display:grid;
+    gap:3px;
+    margin:6px 0 8px;
+    padding:9px 10px;
+    border-radius:13px;
+    text-align:left;
+    border:1px solid rgba(255,231,168,.18);
+}
+.readyGuide strong{
+    color:#fff0bc;
+    font-size:12px;
+}
+.readyGuide span{
+    color:rgba(255,247,223,.78);
+    font-size:12px;
+    line-height:1.28;
+}
+.readyGuide.waiting{
+    background:rgba(255,171,64,.13);
+    border-color:rgba(255,171,64,.35);
+}
+.readyGuide.allReady{
+    background:rgba(46,204,113,.12);
+    border-color:rgba(46,204,113,.36);
+}
+.onlinePlayerRow.waitingRow{
+    border-color:rgba(255,171,64,.38);
+    background:rgba(255,171,64,.08);
+}
+.onlinePlayerRow.readyRow{
+    border-color:rgba(46,204,113,.32);
+    background:rgba(46,204,113,.07);
+}
+.onlinePlayerRow.hostRow{
+    border-color:rgba(255,231,168,.35);
+    background:rgba(255,231,168,.08);
+}
+.onlinePlayerRow small{
+    color:rgba(255,247,223,.55);
+    font-size:10px;
+    font-weight:700;
+}
+.onlinePill.waiting{
+    color:#ffe0b0;
+    border-color:rgba(255,171,64,.45);
+    background:rgba(255,171,64,.16);
+}
+
+
+/* === v0.6.5 — permissão de microfone mais clara === */
+.voiceHint{
+    color:rgba(255,247,223,.76);
+}
