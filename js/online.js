@@ -1,511 +1,285 @@
-/* Jamylle's Castle v0.5.2 — Lobby multiplayer online via Firebase
-   Fundação: criar sala, entrar por código, senha, host e pronto/não pronto.
-   A partida online jogável e WebRTC serão conectados nas próximas versões. */
 
+/* Jamylle's Castle v0.5.3 — partida online jogável inicial */
 (() => {
-    const firebaseConfig = {
-      apiKey: "AIzaSyDw5H48xXyg6_JWSOIXJYNammCRE5AGR7s",
-      authDomain: "jamylles-castle.firebaseapp.com",
-      projectId: "jamylles-castle",
-      storageBucket: "jamylles-castle.firebasestorage.app",
-      messagingSenderId: "615205626241",
-      appId: "1:615205626241:web:4a23ff49f6f46d2f264880",
-      measurementId: "G-K70PSLHEE2"
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyDw5H48xXyg6_JWSOIXJYNammCRE5AGR7s",
+    authDomain: "jamylles-castle.firebaseapp.com",
+    projectId: "jamylles-castle",
+    storageBucket: "jamylles-castle.firebasestorage.app",
+    messagingSenderId: "615205626241",
+    appId: "1:615205626241:web:4a23ff49f6f46d2f264880",
+    measurementId: "G-K70PSLHEE2"
+  };
 
-    let app = null;
-    let auth = null;
-    let db = null;
-    let currentUser = null;
-    let currentRoomCode = '';
-    let currentRoom = null;
-    let currentPlayers = [];
-    let roomUnsub = null;
-    let playersUnsub = null;
-    let heartbeatTimer = null;
+  const CARD_VALUES = ['3','4','5','6','7','8','9','10','J','Q','K','A','2'];
+  const SUITS = [
+    { id:'filtro', label:'Filtro', symbol:'⚱️' },
+    { id:'chinelo', label:'Chinelo', symbol:'🩴' },
+    { id:'cadeira', label:'Cadeira', symbol:'🪑' },
+    { id:'papagaio', label:'Papagaio', symbol:'🦜' }
+  ];
+  const JOKERS = [
+    { valueStr:'★', suitId:'coringa', power:13, label:'Caramelo', symbol:'🐕' },
+    { valueStr:'★', suitId:'coringa', power:13, label:'João-de-barro', symbol:'🐦' }
+  ];
 
-    const dom = {};
+  let app, auth, db, currentUser;
+  let currentRoomCode = '', currentRoom = null, currentPlayers = [], currentHand = [];
+  let selectedCardIds = new Set(), onlineMode = false, processingActions = false;
+  let roomUnsub, playersUnsub, handUnsub, actionsUnsub, heartbeatTimer, botTimer;
+  const dom = {};
 
-    function qs(selector){ return document.querySelector(selector); }
+  function qs(s){ return document.querySelector(s); }
+  function collectDom(){
+    dom.modal = qs('#onlineModal'); dom.status = qs('#onlineStatus');
+    dom.roomCode = qs('#onlineRoomCode'); dom.password = qs('#onlineRoomPassword');
+    dom.lobby = qs('#onlineLobby'); dom.lobbyTitle = qs('#onlineLobbyTitle');
+    dom.playersList = qs('#onlinePlayersList'); dom.readyButton = qs('#readyButton'); dom.startButton = qs('#startOnlineButton');
+    dom.playerName = qs('#playerName'); dom.onlinePlayerName = qs('#onlinePlayerName');
+    dom.menuRoomName = qs('#roomName'); dom.menuPassword = qs('#roomPassword');
+    dom.deckCount = qs('#deckCount'); dom.botCount = qs('#botCount'); dom.includeJokers = qs('#includeJokers');
+    dom.allowObservers = qs('#allowObservers'); dom.observerVoicePolicy = qs('#observerVoicePolicy');
+    dom.menuScreen = qs('#menuScreen'); dom.gameScreen = qs('#gameScreen'); dom.roomInfo = qs('#roomInfo');
+    dom.turnInfo = qs('#turnInfo'); dom.ruleHint = qs('#ruleHint'); dom.playersSummary = qs('#playersSummary');
+    dom.tableCards = qs('#tableCards'); dom.roundHistory = qs('#roundHistory'); dom.playerHand = qs('#playerHand');
+    dom.selectionMessage = qs('#selectionMessage'); dom.playButton = qs('#playButton'); dom.passButton = qs('#passButton');
+    dom.rematchButton = qs('#rematchButton');
+  }
 
-    function collectDom(){
-        dom.modal = qs('#onlineModal');
-        dom.status = qs('#onlineStatus');
-        dom.roomCode = qs('#onlineRoomCode');
-        dom.password = qs('#onlineRoomPassword');
-        dom.lobby = qs('#onlineLobby');
-        dom.lobbyTitle = qs('#onlineLobbyTitle');
-        dom.playersList = qs('#onlinePlayersList');
-        dom.readyButton = qs('#readyButton');
-        dom.startButton = qs('#startOnlineButton');
-        dom.playerName = qs('#playerName');
-        dom.onlinePlayerName = qs('#onlinePlayerName');
-        dom.menuRoomName = qs('#roomName');
-        dom.menuPassword = qs('#roomPassword');
-        dom.deckCount = qs('#deckCount');
-        dom.botCount = qs('#botCount');
-        dom.includeJokers = qs('#includeJokers');
-        dom.allowObservers = qs('#allowObservers');
-        dom.observerVoicePolicy = qs('#observerVoicePolicy');
+  function setStatus(message, type=''){
+    if(!dom.status) return;
+    dom.status.textContent = message;
+    dom.status.classList.toggle('error', type === 'error');
+    dom.status.classList.toggle('ok', type === 'ok');
+  }
+  function normalizeRoomCode(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]/g,'').toUpperCase().slice(0,18) || 'CASTELO'; }
+  function getPlayerName(){
+    const n = (String(dom.onlinePlayerName?.value||'').trim() || String(dom.playerName?.value||'').trim() || 'Jogador').slice(0,16);
+    if(dom.playerName) dom.playerName.value = n;
+    if(dom.onlinePlayerName) dom.onlinePlayerName.value = n;
+    return n;
+  }
+  function simpleHash(text){ let h=0; for(const ch of String(text||'')){ h=((h<<5)-h)+ch.charCodeAt(0); h|=0; } return String(h); }
+  function ts(){ return firebase.firestore.FieldValue.serverTimestamp(); }
+  function roomRef(c){ return db.collection('rooms').doc(c); }
+  function playerRef(c,u){ return roomRef(c).collection('players').doc(u); }
+  function handRef(c,u){ return roomRef(c).collection('hands').doc(u); }
+  function actionsRef(c){ return roomRef(c).collection('actions'); }
+  function isHost(){ return Boolean(currentUser && currentRoom && currentUser.uid === currentRoom.hostUid); }
+  function clone(v){ return JSON.parse(JSON.stringify(v || {})); }
+  function esc(v){ return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
+
+  function cardPower(v){ return v === '★' ? 13 : CARD_VALUES.indexOf(v); }
+  function createDeck(deckCount=1, includeJokers=false){
+    const cards=[];
+    for(let d=0; d<deckCount; d++){
+      for(const s of SUITS) for(const v of CARD_VALUES) cards.push({id:`${d}-${v}-${s.id}-${Math.random().toString(36).slice(2,7)}`, deckIndex:d, valueStr:v, suitId:s.id, suitName:s.label, suitSymbol:s.symbol, power:cardPower(v), isJoker:false});
+      if(includeJokers) for(const j of JOKERS) cards.push({id:`${d}-joker-${j.label}-${Math.random().toString(36).slice(2,7)}`, deckIndex:d, valueStr:j.valueStr, suitId:j.suitId, suitName:j.label, suitSymbol:j.symbol, power:j.power, isJoker:true});
     }
+    return cards;
+  }
+  function shuffle(a){ const x=[...a]; for(let i=x.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [x[i],x[j]]=[x[j],x[i]];} return x; }
+  function sortCards(a){ return [...a].sort((x,y)=>Number(x.power)-Number(y.power)||String(x.suitId).localeCompare(String(y.suitId))); }
+  function sameValue(a){ return Boolean(a.length) && a.every(c=>Number(c.power)===Number(a[0].power)); }
+  function desc(combo){ if(!combo) return 'Mesa livre'; const label=combo.cards?.[0]?.valueStr||'?'; return `${combo.count} ${combo.count>1?'cartas':'carta'} de ${label}`; }
+  function canPlay(sel, table){ if(!sel.length || !sameValue(sel)) return false; if(!table) return true; return sel.length===table.count && Number(sel[0].power)>Number(table.power); }
+  function isBreaker(combo){ return combo && Number(combo.power) >= cardPower('2'); }
+  function invalid(sel, table){ if(!sel.length) return 'Selecione uma ou mais cartas.'; if(!sameValue(sel)) return 'A jogada precisa ter cartas do mesmo valor.'; if(!table) return ''; if(sel.length!==table.count) return `Você precisa jogar exatamente ${table.count} carta(s).`; if(Number(sel[0].power)<=Number(table.power)) return 'A carta precisa ser maior que a jogada da mesa.'; return ''; }
+  function rankName(i,total){ if(i===0)return'Majestade'; if(i===1)return'Regente'; if(i===total-1)return'Aldeão'; if(i===total-2&&total>=4)return'Plebeu'; return'Cortesão'; }
 
-    function setStatus(message, type = ''){
-        if(!dom.status) return;
-        dom.status.textContent = message;
-        dom.status.classList.toggle('error', type === 'error');
-        dom.status.classList.toggle('ok', type === 'ok');
-    }
+  async function initFirebase(){
+    collectDom();
+    if(!window.firebase){ setStatus('Firebase não carregou. Confira sua internet e publique em HTTPS.', 'error'); return false; }
+    try{
+      app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth(); db = firebase.firestore();
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const credential = auth.currentUser ? {user:auth.currentUser} : await auth.signInAnonymously();
+      currentUser = credential.user || auth.currentUser;
+      setStatus('Firebase conectado. Pronto para criar ou entrar em uma sala.', 'ok');
+      return true;
+    }catch(e){ console.error(e); setStatus(e?.code==='auth/operation-not-allowed'?'Ative Authentication > Anonymous no Firebase Console.':`Falha ao conectar: ${e?.message||e}`, 'error'); return false; }
+  }
+  async function ensureReady(){ return (db && auth && currentUser) || await initFirebase(); }
 
-    function normalizeRoomCode(value){
-        return String(value || '')
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-zA-Z0-9_-]/g, '')
-            .toUpperCase()
-            .slice(0, 18) || 'CASTELO';
-    }
+  function openOnlineModal(){
+    collectDom(); if(dom.modal) dom.modal.hidden=false;
+    if(dom.onlinePlayerName && !dom.onlinePlayerName.value) dom.onlinePlayerName.value=String(dom.playerName?.value||'').trim()||'Jogador';
+    if(dom.roomCode && !dom.roomCode.value) dom.roomCode.value=normalizeRoomCode(dom.menuRoomName?.value||'CASTELO');
+    if(dom.password && !dom.password.value && dom.menuPassword?.value) dom.password.value=dom.menuPassword.value;
+    initFirebase();
+  }
+  function closeOnlineModal(){ if(dom.modal) dom.modal.hidden=true; }
 
-    function getPlayerName(){
-        const modalName = String(dom.onlinePlayerName?.value || '').trim();
-        const menuName = String(dom.playerName?.value || '').trim();
-        const name = (modalName || menuName || 'Jogador').slice(0, 16);
-        if(dom.playerName && name) dom.playerName.value = name;
-        if(dom.onlinePlayerName && name) dom.onlinePlayerName.value = name;
-        return name || 'Jogador';
-    }
-
-    function simpleHash(text){
-        let hash = 0;
-        const input = String(text || '');
-        for(let i = 0; i < input.length; i++){
-            hash = ((hash << 5) - hash) + input.charCodeAt(i);
-            hash |= 0;
-        }
-        return String(hash);
-    }
-
-    function serverTimestamp(){
-        return firebase.firestore.FieldValue.serverTimestamp();
-    }
-
-    function roomRef(roomCode){
-        return db.collection('rooms').doc(roomCode);
-    }
-
-    function playerRef(roomCode, uid){
-        return roomRef(roomCode).collection('players').doc(uid);
-    }
-
-    async function initFirebase(){
-        collectDom();
-
-        if(!window.firebase){
-            setStatus('Firebase não carregou. Confira sua internet e publique em uma página HTTPS.', 'error');
-            return false;
-        }
-
-        try{
-            app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
-            auth = firebase.auth();
-            db = firebase.firestore();
-            await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-            const credential = await auth.signInAnonymously();
-            currentUser = credential.user || auth.currentUser;
-            setStatus('Firebase conectado. Pronto para criar ou entrar em uma sala.', 'ok');
-            return true;
-        }catch(error){
-            console.error(error);
-            const message = error?.code === 'auth/operation-not-allowed'
-                ? 'Ative Authentication > Anonymous no Firebase Console para usar o multiplayer.'
-                : `Falha ao conectar: ${error?.message || error}`;
-            setStatus(message, 'error');
-            return false;
-        }
-    }
-
-    function openOnlineModal(){
-        collectDom();
-        if(dom.modal) dom.modal.hidden = false;
-        if(dom.onlinePlayerName && !dom.onlinePlayerName.value){
-            dom.onlinePlayerName.value = String(dom.playerName?.value || '').trim() || 'Jogador';
-        }
-        if(dom.roomCode && !dom.roomCode.value){
-            dom.roomCode.value = normalizeRoomCode(dom.menuRoomName?.value || 'CASTELO');
-        }
-        if(dom.password && !dom.password.value && dom.menuPassword?.value){
-            dom.password.value = dom.menuPassword.value;
-        }
-        initFirebase();
-    }
-
-    function closeOnlineModal(){
-        if(dom.modal) dom.modal.hidden = true;
-    }
-
-    async function createRoom(){
-        if(dom.modal) dom.modal.hidden = false;
-        if(!await ensureReady()) return;
-        const code = normalizeRoomCode(dom.roomCode?.value || dom.menuRoomName?.value || 'CASTELO');
-        if(dom.roomCode) dom.roomCode.value = code;
-        const password = String(dom.password?.value || dom.menuPassword?.value || '').trim();
-        const ref = roomRef(code);
-        const snapshot = await ref.get();
-
-        if(snapshot.exists){
-            setStatus(`A sala ${code} já existe. Escolha outro código ou entre nela.`, 'error');
-            return;
-        }
-
-        const roomData = {
-            code,
-            title: code,
-            phase: 'lobby',
-            hostUid: currentUser.uid,
-            hostName: getPlayerName(),
-            passwordProtected: Boolean(password),
-            passwordHash: password ? simpleHash(password) : '',
-            deckCount: Number(dom.deckCount?.value || 1),
-            botCount: Number(dom.botCount?.value || 0),
-            includeJokers: Boolean(dom.includeJokers?.checked),
-            allowObservers: Boolean(dom.allowObservers?.checked),
-            observerVoicePolicy: dom.observerVoicePolicy?.value || 'listen-only',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            voiceReady: false,
-            gameStateVersion: 0,
-        };
-
-        await ref.set(roomData);
-        await playerRef(code, currentUser.uid).set({
-            uid: currentUser.uid,
-            name: getPlayerName(),
-            isHost: true,
-            ready: true,
-            role: 'host',
-            connected: true,
-            joinedAt: serverTimestamp(),
-            lastSeen: serverTimestamp(),
-        }, { merge: true });
-
-        attachRoom(code);
-        setStatus(`Sala ${code} criada. Compartilhe o código com os jogadores.`, 'ok');
-    }
-
-    async function joinRoom(){
-        if(dom.modal) dom.modal.hidden = false;
-        if(!await ensureReady()) return;
-        const code = normalizeRoomCode(dom.roomCode?.value || dom.menuRoomName?.value || '');
-        if(dom.roomCode) dom.roomCode.value = code;
-        const password = String(dom.password?.value || '').trim();
-        const ref = roomRef(code);
-        const snapshot = await ref.get();
-
-        if(!snapshot.exists){
-            setStatus(`Não encontrei a sala ${code}. Confira o nome/código ou peça ao anfitrião para criar a sala primeiro.`, 'error');
-            return;
-        }
-
-        const room = snapshot.data();
-        if(room.passwordProtected && simpleHash(password) !== room.passwordHash){
-            setStatus('Senha incorreta para esta sala.', 'error');
-            return;
-        }
-
-        await playerRef(code, currentUser.uid).set({
-            uid: currentUser.uid,
-            name: getPlayerName(),
-            isHost: currentUser.uid === room.hostUid,
-            ready: false,
-            role: currentUser.uid === room.hostUid ? 'host' : 'player',
-            connected: true,
-            joinedAt: serverTimestamp(),
-            lastSeen: serverTimestamp(),
-        }, { merge: true });
-
-        await ref.set({ updatedAt: serverTimestamp() }, { merge: true });
-        attachRoom(code);
-        setStatus(`Você entrou na sala ${code}.`, 'ok');
-    }
-
-    async function ensureReady(){
-        if(db && auth && currentUser) return true;
-        return initFirebase();
-    }
-
-    function attachRoom(code){
-        detachRoom();
-        currentRoomCode = code;
-
-        if(dom.lobby) dom.lobby.hidden = false;
-        if(dom.lobbyTitle) dom.lobbyTitle.textContent = `Sala ${code}`;
-
-        roomUnsub = roomRef(code).onSnapshot(snapshot => {
-            currentRoom = snapshot.exists ? snapshot.data() : null;
-            if(!currentRoom){
-                setStatus('A sala foi encerrada.', 'error');
-                detachRoom();
-                renderLobby();
-                return;
-            }
-            renderLobby();
-        }, error => {
-            console.error(error);
-            setStatus(`Erro ao ler a sala: ${error.message}`, 'error');
-        });
-
-        playersUnsub = roomRef(code).collection('players').orderBy('joinedAt', 'asc').onSnapshot(snapshot => {
-            currentPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderLobby();
-        }, error => {
-            console.error(error);
-            setStatus(`Erro ao ler jogadores: ${error.message}`, 'error');
-        });
-
-        heartbeatTimer = window.setInterval(() => {
-            if(currentRoomCode && currentUser){
-                playerRef(currentRoomCode, currentUser.uid).set({
-                    connected: true,
-                    lastSeen: serverTimestamp(),
-                }, { merge: true }).catch(console.warn);
-            }
-        }, 15000);
-    }
-
-    function detachRoom(){
-        if(roomUnsub) roomUnsub();
-        if(playersUnsub) playersUnsub();
-        roomUnsub = null;
-        playersUnsub = null;
-        window.clearInterval(heartbeatTimer);
-        heartbeatTimer = null;
-    }
-
-    function renderLobby(){
-        if(!dom.playersList) return;
-        if(!currentRoom || !currentRoomCode){
-            dom.playersList.innerHTML = '';
-            if(dom.lobby) dom.lobby.hidden = true;
-            return;
-        }
-
-        const isHost = currentUser?.uid === currentRoom.hostUid;
-        const me = currentPlayers.find(player => player.uid === currentUser?.uid);
-        const botCount = Number(currentRoom.botCount || 0);
-        const totalParticipants = currentPlayers.length + botCount;
-        const canForceStart = isHost && totalParticipants >= 3;
-
-        if(currentRoom.phase === 'playing'){
-            enterOnlineTable();
-        }
-
-        if(dom.readyButton){
-            dom.readyButton.textContent = me?.ready ? 'Estou pronto ✓' : 'Estou pronto';
-        }
-        if(dom.startButton){
-            dom.startButton.disabled = !canForceStart;
-            dom.startButton.textContent = isHost ? 'Iniciar partida' : 'Aguardando anfitrião';
-            dom.startButton.title = canForceStart
-                ? 'Forçar início da partida para todos na sala.'
-                : 'A sala precisa ter pelo menos 3 participantes somando jogadores humanos e bots.';
-        }
-
-        const roomMeta = `
-            <div class="onlineRoomMeta">
-                <span class="onlinePill">Baralhos: ${Number(currentRoom.deckCount || 1)}</span>
-                <span class="onlinePill">Bots: ${Number(currentRoom.botCount || 0)}</span>
-                <span class="onlinePill">${currentRoom.includeJokers ? 'Com coringas' : 'Sem coringas'}</span>
-                <span class="onlinePill">${currentRoom.passwordProtected ? 'Com senha' : 'Sem senha'}</span>
-            </div>
-        `;
-
-        dom.playersList.innerHTML = roomMeta + currentPlayers.map(player => {
-            const safeName = escapeHtml(player.name || 'Jogador');
-            const hostPill = player.uid === currentRoom.hostUid ? '<span class="onlinePill host">Host</span>' : '<span></span>';
-            const readyPill = `<span class="onlinePill ${player.ready ? 'ready' : ''}">${player.ready ? 'Pronto' : 'Aguardando'}</span>`;
-            return `<article class="onlinePlayerRow"><strong>${safeName}</strong>${hostPill}${readyPill}</article>`;
-        }).join('');
-
-        const phaseText = currentRoom.phase === 'lobby'
-            ? 'Lobby sincronizado. O anfitrião pode iniciar quando houver participantes suficientes.'
-            : currentRoom.phase === 'playing'
-                ? 'Partida iniciada. Todos estão sendo levados para a mesa online.'
-                : `Estado da sala: ${currentRoom.phase}`;
-        setStatus(`${phaseText} Jogadores: ${currentPlayers.length}. Bots: ${Number(currentRoom.botCount || 0)}.`, 'ok');
-    }
-
-    async function toggleReady(){
-        if(!currentRoomCode || !currentUser) return;
-        const me = currentPlayers.find(player => player.uid === currentUser.uid);
-        await playerRef(currentRoomCode, currentUser.uid).set({
-            ready: !me?.ready,
-            lastSeen: serverTimestamp(),
-        }, { merge: true });
-    }
-
-    async function startOnline(){
-        if(!currentRoomCode || !currentUser || !currentRoom) return;
-        if(currentUser.uid !== currentRoom.hostUid){
-            setStatus('Apenas o anfitrião pode iniciar a partida.', 'error');
-            return;
-        }
-
-        const botCount = Number(currentRoom.botCount || 0);
-        const totalParticipants = currentPlayers.length + botCount;
-        if(totalParticipants < 3){
-            setStatus('A partida precisa de pelo menos 3 participantes somando jogadores humanos e bots.', 'error');
-            return;
-        }
-
-        await roomRef(currentRoomCode).set({
-            phase: 'playing',
-            startedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            gameStateVersion: firebase.firestore.FieldValue.increment(1),
-            forcedStartByHost: true,
-            publicMessage: 'O anfitrião iniciou a partida. Todos entram na mesa online.',
-        }, { merge: true });
-
-        setStatus('Partida iniciada pelo anfitrião. Abrindo mesa online...', 'ok');
-        enterOnlineTable();
-    }
-
-
-    function enterOnlineTable(){
-        if(!currentRoom || !currentRoomCode) return;
-
-        if(dom.modal) dom.modal.hidden = true;
-
-        const menuScreen = document.querySelector('#menuScreen');
-        const gameScreen = document.querySelector('#gameScreen');
-        menuScreen?.classList.remove('active');
-        gameScreen?.classList.add('active');
-
-        const roomInfo = document.querySelector('#roomInfo');
-        const turnInfo = document.querySelector('#turnInfo');
-        const ruleHint = document.querySelector('#ruleHint');
-        const playersSummary = document.querySelector('#playersSummary');
-        const tableCards = document.querySelector('#tableCards');
-        const roundHistory = document.querySelector('#roundHistory');
-        const playerHand = document.querySelector('#playerHand');
-        const selectionMessage = document.querySelector('#selectionMessage');
-        const playButton = document.querySelector('#playButton');
-        const passButton = document.querySelector('#passButton');
-        const rematchButton = document.querySelector('#rematchButton');
-
-        if(roomInfo) roomInfo.textContent = `Sala online ${currentRoomCode}`;
-        if(turnInfo) turnInfo.textContent = 'Partida online iniciada';
-        if(ruleHint) ruleHint.textContent = 'O anfitrião iniciou a sala. A sincronização jogável completa vem na próxima etapa.';
-
-        const botCount = Number(currentRoom.botCount || 0);
-        const playerRows = currentPlayers.map(player => {
-            const isHost = player.uid === currentRoom.hostUid;
-            return `<article class="playerBadge ${isHost ? 'active' : ''}">
-                <strong>${escapeHtml(player.name || 'Jogador')}</strong>
-                <span>${isHost ? 'Anfitrião' : 'Jogador online'}</span>
-                ${player.ready ? '<em>Pronto</em>' : ''}
-            </article>`;
-        }).join('');
-
-        const botRows = Array.from({ length: botCount }, (_, index) => `
-            <article class="playerBadge">
-                <strong>Bot ${index + 1}</strong>
-                <span>Controlado pelo anfitrião</span>
-                <em>IA</em>
-            </article>
-        `).join('');
-
-        if(playersSummary) playersSummary.innerHTML = playerRows + botRows;
-        if(tableCards){
-            tableCards.innerHTML = `
-                <div class="onlineTableNotice">
-                    <strong>Portões da sala abertos</strong>
-                    <span>O anfitrião iniciou a partida online.</span>
-                    <small>Próxima etapa: distribuição sincronizada, mãos privadas e turnos em tempo real.</small>
-                </div>
-            `;
-        }
-        if(roundHistory) roundHistory.innerHTML = '<span>Aguardando primeira jogada online sincronizada.</span>';
-        if(playerHand){
-            playerHand.innerHTML = `
-                <p class="observerNotice">
-                    Você está na mesa online da sala <strong>${escapeHtml(currentRoomCode)}</strong>.<br>
-                    Esta versão confirma o início forçado para todos. A próxima versão conectará sua mão privada.
-                </p>
-            `;
-        }
-        if(selectionMessage) selectionMessage.textContent = 'Mesa online aberta. Sincronização jogável será conectada na próxima etapa.';
-        if(playButton) playButton.disabled = true;
-        if(passButton) passButton.disabled = true;
-        if(rematchButton) rematchButton.hidden = true;
-    }
-
-    async function leaveRoom(){
-        if(currentRoomCode && currentUser){
-            try{
-                await playerRef(currentRoomCode, currentUser.uid).delete();
-            }catch(error){
-                console.warn(error);
-            }
-        }
-        detachRoom();
-        currentRoomCode = '';
-        currentRoom = null;
-        currentPlayers = [];
-        renderLobby();
-        setStatus('Você saiu da sala.', 'ok');
-    }
-
-    async function copyRoomCode(){
-        if(!currentRoomCode) return;
-        try{
-            await navigator.clipboard.writeText(currentRoomCode);
-            setStatus(`Código ${currentRoomCode} copiado.`, 'ok');
-        }catch(error){
-            setStatus(`Código da sala: ${currentRoomCode}`, 'ok');
-        }
-    }
-
-    function escapeHtml(value){
-        return String(value ?? '')
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#039;');
-    }
-
-    document.addEventListener('click', event => {
-        const gameAction = event.target.closest('[data-action]')?.dataset.action;
-        if(gameAction === 'open-online'){
-            openOnlineModal();
-            return;
-        }
-
-        const button = event.target.closest('[data-online-action]');
-        if(!button) return;
-        const action = button.dataset.onlineAction;
-
-        if(action === 'close-online') closeOnlineModal();
-        if(action === 'create-room') createRoom();
-        if(action === 'join-room') joinRoom();
-        if(action === 'toggle-ready') toggleReady();
-        if(action === 'start-online') startOnline();
-        if(action === 'leave-room') leaveRoom();
-        if(action === 'copy-room') copyRoomCode();
+  async function createRoom(){
+    if(dom.modal) dom.modal.hidden=false; if(!await ensureReady()) return;
+    const code=normalizeRoomCode(dom.roomCode?.value||dom.menuRoomName?.value||'CASTELO'); if(dom.roomCode) dom.roomCode.value=code;
+    const password=String(dom.password?.value||dom.menuPassword?.value||'').trim();
+    const snap=await roomRef(code).get();
+    if(snap.exists){ setStatus(`A sala ${code} já existe. Escolha outro código ou entre nela.`, 'error'); return; }
+    await roomRef(code).set({
+      code, title:code, phase:'lobby', hostUid:currentUser.uid, hostName:getPlayerName(),
+      passwordProtected:Boolean(password), passwordHash:password?simpleHash(password):'',
+      deckCount:Number(dom.deckCount?.value||1), botCount:Number(dom.botCount?.value||0), includeJokers:Boolean(dom.includeJokers?.checked),
+      allowObservers:Boolean(dom.allowObservers?.checked), observerVoicePolicy:dom.observerVoicePolicy?.value||'listen-only',
+      createdAt:ts(), updatedAt:ts(), gameStateVersion:0
     });
+    await playerRef(code,currentUser.uid).set({uid:currentUser.uid,name:getPlayerName(),isHost:true,isBot:false,ready:true,role:'host',connected:true,cardCount:0,joinedAt:ts(),lastSeen:ts()},{merge:true});
+    attachRoom(code); setStatus(`Sala ${code} criada. Compartilhe o código com os jogadores.`, 'ok');
+  }
 
-    window.addEventListener('beforeunload', () => {
-        if(currentRoomCode && currentUser){
-            playerRef(currentRoomCode, currentUser.uid).set({
-                connected: false,
-                lastSeen: serverTimestamp(),
-            }, { merge: true });
-        }
-    });
+  async function joinRoom(){
+    if(dom.modal) dom.modal.hidden=false; if(!await ensureReady()) return;
+    const code=normalizeRoomCode(dom.roomCode?.value||dom.menuRoomName?.value||''); if(dom.roomCode) dom.roomCode.value=code;
+    const snap=await roomRef(code).get();
+    if(!snap.exists){ setStatus(`Não encontrei a sala ${code}. Confira o código ou peça ao anfitrião para criar.`, 'error'); return; }
+    const room=snap.data(); const password=String(dom.password?.value||'').trim();
+    if(room.passwordProtected && simpleHash(password)!==room.passwordHash){ setStatus('Senha incorreta para esta sala.', 'error'); return; }
+    if(room.phase!=='lobby'){ setStatus('Esta sala já iniciou. Entrada em andamento virá depois.', 'error'); return; }
+    await playerRef(code,currentUser.uid).set({uid:currentUser.uid,name:getPlayerName(),isHost:currentUser.uid===room.hostUid,isBot:false,ready:false,role:currentUser.uid===room.hostUid?'host':'player',connected:true,cardCount:0,joinedAt:ts(),lastSeen:ts()},{merge:true});
+    await roomRef(code).set({updatedAt:ts()},{merge:true});
+    attachRoom(code); setStatus(`Você entrou na sala ${code}.`, 'ok');
+  }
 
-    window.jcOnline = {
-        openLobby: openOnlineModal,
-        getCurrentRoomCode: () => currentRoomCode,
-        enterOnlineTable,
-    };
+  function attachRoom(code){
+    detachRoom(); currentRoomCode=code;
+    if(dom.lobby) dom.lobby.hidden=false; if(dom.lobbyTitle) dom.lobbyTitle.textContent=`Sala ${code}`;
+    roomUnsub=roomRef(code).onSnapshot(s=>{ currentRoom=s.exists?s.data():null; if(!currentRoom){setStatus('A sala foi encerrada.','error');detachRoom();renderLobby();return;} if(currentRoom.phase==='playing'||currentRoom.phase==='finished') enterOnlineTable(); renderLobby(); renderOnlineGame(); if(isHost()) setupHostActionListener(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler a sala: ${e.message}`,'error'));
+    playersUnsub=roomRef(code).collection('players').orderBy('joinedAt','asc').onSnapshot(s=>{ currentPlayers=s.docs.map(d=>({id:d.id,...d.data()})); renderLobby(); renderOnlineGame(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
+    handUnsub=handRef(code,currentUser.uid).onSnapshot(s=>{ currentHand=s.exists?sortCards(s.data().cards||[]):[]; renderOnlineGame(); }, ()=>{});
+    heartbeatTimer=window.setInterval(()=>{ if(currentRoomCode&&currentUser) playerRef(currentRoomCode,currentUser.uid).set({connected:true,lastSeen:ts()},{merge:true}).catch(console.warn); },15000);
+  }
+  function setupHostActionListener(){
+    if(actionsUnsub||!currentRoomCode||!isHost()) return;
+    actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).orderBy('createdAt','asc').onSnapshot(s=>processActionsAsHost(s.docs.map(d=>({id:d.id,...d.data()}))), e=>setStatus(`Erro nas ações: ${e.message}`,'error'));
+  }
+  function detachRoom(){
+    if(roomUnsub)roomUnsub(); if(playersUnsub)playersUnsub(); if(handUnsub)handUnsub(); if(actionsUnsub)actionsUnsub();
+    roomUnsub=playersUnsub=handUnsub=actionsUnsub=null; window.clearInterval(heartbeatTimer); window.clearTimeout(botTimer);
+  }
+
+  function renderLobby(){
+    if(!dom.playersList) return;
+    if(!currentRoom||!currentRoomCode){dom.playersList.innerHTML=''; if(dom.lobby)dom.lobby.hidden=true; return;}
+    const botCount=Number(currentRoom.botCount||0);
+    const total=currentPlayers.filter(p=>!p.isBot).length+(currentRoom.phase==='lobby'?botCount:0);
+    const canStart=isHost()&&total>=3&&currentRoom.phase==='lobby';
+    const me=currentPlayers.find(p=>p.uid===currentUser?.uid);
+    if(dom.readyButton){dom.readyButton.textContent=me?.ready?'Estou pronto ✓':'Estou pronto'; dom.readyButton.disabled=currentRoom.phase!=='lobby';}
+    if(dom.startButton){dom.startButton.disabled=!canStart; dom.startButton.textContent=isHost()?'Iniciar partida':'Aguardando anfitrião';}
+    const meta=`<div class="onlineRoomMeta"><span class="onlinePill">Baralhos: ${Number(currentRoom.deckCount||1)}</span><span class="onlinePill">Bots: ${Number(currentRoom.botCount||0)}</span><span class="onlinePill">${currentRoom.includeJokers?'Com coringas':'Sem coringas'}</span><span class="onlinePill">${currentRoom.passwordProtected?'Com senha':'Sem senha'}</span><span class="onlinePill">${currentRoom.phase==='playing'?'Em partida':currentRoom.phase==='finished'?'Encerrada':'Lobby'}</span></div>`;
+    dom.playersList.innerHTML=meta+currentPlayers.map(p=>`<article class="onlinePlayerRow"><strong>${esc(p.name||'Jogador')}</strong>${p.uid===currentRoom.hostUid?'<span class="onlinePill host">Host</span>':p.isBot?'<span class="onlinePill">Bot</span>':'<span></span>'}<span class="onlinePill ${p.ready?'ready':''}">${p.ready?'Pronto':'Aguardando'}</span></article>`).join('');
+    setStatus(currentRoom.phase==='playing'?`Partida online em andamento. Jogadores: ${currentPlayers.length}.`:`Lobby sincronizado. Jogadores: ${currentPlayers.length}.`,'ok');
+  }
+  async function toggleReady(){ if(!currentRoomCode||!currentUser||currentRoom?.phase!=='lobby')return; const me=currentPlayers.find(p=>p.uid===currentUser.uid); await playerRef(currentRoomCode,currentUser.uid).set({ready:!me?.ready,lastSeen:ts()},{merge:true}); }
+
+  async function startOnline(){
+    if(!currentRoomCode||!currentUser||!currentRoom)return;
+    if(!isHost()){setStatus('Apenas o anfitrião pode iniciar a partida.','error');return;}
+    const humans=currentPlayers.filter(p=>!p.isBot); const botCount=Number(currentRoom.botCount||0);
+    if(humans.length+botCount<3){setStatus('A partida precisa de pelo menos 3 participantes somando jogadores humanos e bots.','error');return;}
+    await startGameAsHost(humans,botCount); setStatus('Partida iniciada. Cartas distribuídas.','ok'); enterOnlineTable();
+  }
+  async function startGameAsHost(humans,botCount){
+    const batch=db.batch(); const bots=[];
+    for(let i=0;i<botCount;i++){ const bot={uid:`bot-${i+1}`,name:`Bot ${i+1}`,isHost:false,isBot:true,ready:true,role:'bot',connected:true,cardCount:0,joinedAt:ts(),lastSeen:ts()}; bots.push(bot); batch.set(playerRef(currentRoomCode,bot.uid),bot,{merge:true}); }
+    const participants=[...humans.map(p=>({uid:p.uid,name:p.name||'Jogador',isBot:false})),...bots.map(b=>({uid:b.uid,name:b.name,isBot:true}))];
+    const hands=new Map(participants.map(p=>[p.uid,[]]));
+    shuffle(createDeck(Number(currentRoom.deckCount||1),Boolean(currentRoom.includeJokers))).forEach((card,i)=>hands.get(participants[i%participants.length].uid).push(card));
+    participants.forEach(p=>{ const cards=sortCards(hands.get(p.uid)||[]); batch.set(handRef(currentRoomCode,p.uid),{uid:p.uid,cards,updatedAt:ts()},{merge:true}); batch.set(playerRef(currentRoomCode,p.uid),{cardCount:cards.length,finishedPosition:null,roleTitle:'',hasPassed:false},{merge:true}); });
+    const starter=participants[Math.floor(Math.random()*participants.length)];
+    const game={phase:'playing',turnOrder:participants.map(p=>p.uid),turnUid:starter.uid,turnName:starter.name,tableCombo:null,tableOwnerUid:'',passes:{},history:[],finishedOrder:[],turnCounter:0,lastMessage:`${starter.name} foi sorteado e inicia a partida online.`};
+    batch.set(roomRef(currentRoomCode),{phase:'playing',game,startedAt:ts(),updatedAt:ts(),publicMessage:game.lastMessage,gameStateVersion:firebase.firestore.FieldValue.increment(1)},{merge:true});
+    await batch.commit();
+  }
+
+  function enterOnlineTable(){ if(!currentRoom||!currentRoomCode)return; onlineMode=true; if(dom.modal)dom.modal.hidden=true; dom.menuScreen?.classList.remove('active'); dom.gameScreen?.classList.add('active'); renderOnlineGame(); }
+  function unfinishedUids(game){ const fin=new Set(game.finishedOrder||[]); return (game.turnOrder||[]).filter(uid=>!fin.has(uid)); }
+  function nextUid(game,fromUid,includePassed=false){ const order=game.turnOrder||[]; const start=Math.max(0,order.indexOf(fromUid)); const fin=new Set(game.finishedOrder||[]); for(let o=1;o<=order.length;o++){const uid=order[(start+o)%order.length]; if(fin.has(uid))continue; if(!includePassed&&game.passes?.[uid])continue; return uid;} return order.find(uid=>!fin.has(uid))||''; }
+
+  function renderOnlineGame(){
+    if(!onlineMode||!currentRoom||!currentRoom.game)return; collectDom();
+    const game=currentRoom.game; const isMyTurn=game.phase==='playing'&&game.turnUid===currentUser?.uid;
+    const turnPlayer=currentPlayers.find(p=>p.uid===game.turnUid);
+    const selected=currentHand.filter(c=>selectedCardIds.has(c.id)); const reason=invalid(selected,game.tableCombo);
+    if(dom.roomInfo)dom.roomInfo.textContent=`Sala online ${currentRoomCode}`;
+    if(dom.turnInfo)dom.turnInfo.textContent=game.phase==='finished'?'Partida online encerrada':`Vez de ${turnPlayer?.name||game.turnName||'jogador'}`;
+    if(dom.ruleHint)dom.ruleHint.textContent=game.tableCombo?`Vença: ${desc(game.tableCombo)}`:'Mesa livre: jogue uma ou mais cartas do mesmo valor.';
+    renderPlayers(game); renderTable(game); renderHistory(game); renderHand(isMyTurn); renderControls(isMyTurn,reason,selected);
+    if(game.phase==='finished')renderFinish(game);
+  }
+  function renderPlayers(game){ if(!dom.playersSummary)return; const fin=new Set(game.finishedOrder||[]); dom.playersSummary.innerHTML=currentPlayers.map(p=>{const idx=(game.finishedOrder||[]).indexOf(p.uid); const role=idx>=0?rankName(idx,currentPlayers.length):p.isBot?'IA':''; return `<article class="playerBadge ${p.uid===game.turnUid?'active':''} ${game.passes?.[p.uid]?'passed':''} ${fin.has(p.uid)?'finished':''}"><strong>${esc(p.name||'Jogador')}</strong><span>${Number(p.cardCount||0)} cartas</span>${role?`<em>${esc(role)}</em>`:''}</article>`;}).join('');}
+  function renderTable(game){
+    if(!dom.tableCards)return; dom.tableCards.innerHTML='';
+    if(!game.tableCombo){dom.tableCards.innerHTML='<p class="emptyTable">Mesa livre</p>';return;}
+    const owner=currentPlayers.find(p=>p.uid===game.tableCombo.playerUid);
+    const label=document.createElement('div'); label.className='tableOwner'; label.textContent=`Líder: ${owner?.name||game.tableCombo.playerName||'Jogador'}`; dom.tableCards.appendChild(label);
+    const caption=document.createElement('div'); caption.className='tableComboCaption'; caption.textContent=desc(game.tableCombo); dom.tableCards.appendChild(caption);
+    const cards=game.tableCombo.cards||[]; const spread=cards.length<=1?0:cards.length===2?44:cards.length===3?36:cards.length===4?28:22; const mid=(cards.length-1)/2;
+    cards.forEach((card,i)=>{const el=cardEl(card,true); const c=i-mid; el.style.setProperty('--card-offset',`${c*spread}px`); el.style.setProperty('--card-rotation',`${c*5}deg`); el.style.setProperty('--card-lift',`${Math.abs(c)*2.5}px`); el.style.setProperty('--card-z',`${20+i}`); el.classList.add('playedCard'); if(isBreaker(game.tableCombo))el.classList.add('breakerCard'); dom.tableCards.appendChild(el);});
+  }
+  function renderHistory(game){ if(!dom.roundHistory)return; const h=game.history||[]; if(!h.length){dom.roundHistory.innerHTML='<span>Nenhuma jogada online ainda.</span>';return;} dom.roundHistory.innerHTML=h.slice(-8).reverse().map(x=>x.type==='pass'?`<div class="historyItem"><strong>${esc(x.playerName)}</strong> <span>passou</span></div>`:`<div class="historyItem"><strong>${esc(x.playerName)}</strong> <span>${esc(x.description||'')}</span></div>`).join('');}
+  function playablePowers(hand,table){ const g=new Map(); hand.forEach(c=>{const p=Number(c.power); if(!g.has(p))g.set(p,[]); g.get(p).push(c);}); if(!table)return new Set([...g.keys()]); const out=new Set(); g.forEach((cards,p)=>{if(cards.length>=table.count&&Number(p)>Number(table.power))out.add(Number(p));}); return out;}
+  function renderHand(isMyTurn){
+    if(!dom.playerHand)return; dom.playerHand.innerHTML='';
+    if(currentRoom?.game?.phase==='finished'){dom.playerHand.innerHTML='<p class="observerNotice">Partida online encerrada.</p>';return;}
+    if(!currentHand.length){dom.playerHand.innerHTML='<p class="observerNotice">Você já acabou suas cartas ou aguarda distribuição.</p>';return;}
+    const powers=playablePowers(currentHand,currentRoom.game.tableCombo);
+    currentHand.forEach(card=>{const el=cardEl(card,!isMyTurn); if(isMyTurn)el.classList.add(powers.has(Number(card.power))?'playableHint':'notPlayable'); if(selectedCardIds.has(card.id))el.classList.add('selected'); el.addEventListener('click',()=>{if(!isMyTurn)return; if(selectedCardIds.has(card.id))selectedCardIds.delete(card.id); else selectedCardIds.add(card.id); renderOnlineGame();}); dom.playerHand.appendChild(el);});
+  }
+  function renderControls(isMyTurn,reason,selected){
+    if(dom.playButton)dom.playButton.disabled=!isMyTurn||Boolean(reason);
+    if(dom.passButton)dom.passButton.disabled=!isMyTurn||!currentRoom?.game?.tableCombo;
+    if(dom.rematchButton)dom.rematchButton.hidden=true;
+    if(!dom.selectionMessage)return;
+    if(currentRoom?.game?.phase==='finished')dom.selectionMessage.textContent='A partida online terminou.';
+    else if(!isMyTurn)dom.selectionMessage.textContent='Aguarde sua vez online.';
+    else if(!selected.length)dom.selectionMessage.textContent='Sua vez: selecione cartas do mesmo valor.';
+    else if(reason)dom.selectionMessage.textContent=reason;
+    else dom.selectionMessage.textContent=`Jogada válida: ${selected.length} carta(s) de ${selected[0].valueStr}.`;
+  }
+  function renderFinish(game){ if(!dom.tableCards)return; const total=currentPlayers.length; const rows=(game.finishedOrder||[]).map((uid,i)=>{const p=currentPlayers.find(x=>x.uid===uid); return `${i+1}º — ${rankName(i,total)}: ${p?.name||'Jogador'}`;}).join('<br>'); dom.tableCards.innerHTML=`<div class="onlineTableNotice"><strong>Cerimônia da Corte</strong><span>${rows}</span><small>Revanche online virá depois da partida base estabilizar.</small></div>`;}
+  function cardEl(card,disabled=false){ const el=document.createElement('button'); el.className=`card suit-${card.suitId||card.suit}`; el.type='button'; el.disabled=disabled; el.dataset.cardId=card.id; el.title=`${card.valueStr} · ${card.suitName}`; el.innerHTML=`<span class="cardCorner top">${esc(card.valueStr)}<small>${card.suitSymbol}</small></span><span class="cardSymbol">${card.suitSymbol}</span><span class="cardCorner bottom">${esc(card.valueStr)}<small>${card.suitSymbol}</small></span>`; return el; }
+
+  async function sendPlay(){ if(!onlineMode||!currentRoomCode||!currentUser||currentRoom?.game?.turnUid!==currentUser.uid)return; const sel=currentHand.filter(c=>selectedCardIds.has(c.id)); const reason=invalid(sel,currentRoom.game.tableCombo); if(reason){if(dom.selectionMessage)dom.selectionMessage.textContent=reason;return;} await actionsRef(currentRoomCode).add({uid:currentUser.uid,playerName:getPlayerName(),type:'play',cardIds:[...selectedCardIds],processed:false,createdAt:ts()}); selectedCardIds.clear(); renderOnlineGame();}
+  async function sendPass(){ if(!onlineMode||!currentRoomCode||!currentUser||currentRoom?.game?.turnUid!==currentUser.uid)return; if(!currentRoom.game.tableCombo)return; await actionsRef(currentRoomCode).add({uid:currentUser.uid,playerName:getPlayerName(),type:'pass',processed:false,createdAt:ts()});}
+  async function processActionsAsHost(actions){ if(processingActions||!isHost()||!currentRoom?.game)return; processingActions=true; try{for(const a of actions)await processActionAsHost(a);}finally{processingActions=false;}}
+  async function processActionAsHost(action){ if(!action||action.processed)return; const game=currentRoom.game; if(game.phase!=='playing'||action.uid!==game.turnUid){await actionsRef(currentRoomCode).doc(action.id).set({processed:true,rejected:true},{merge:true});return;} if(action.type==='pass')await hostPass(action.uid,action.id); if(action.type==='play')await hostPlay(action.uid,action.cardIds||[],action.id);}
+  async function hostPlay(uid,cardIds,actionId=null){
+    if(!isHost()||!currentRoom?.game)return; const game=clone(currentRoom.game); if(uid!==game.turnUid)return;
+    const snap=await handRef(currentRoomCode,uid).get(); const hand=snap.exists?snap.data().cards||[]:[]; const ids=new Set(cardIds); const selected=hand.filter(c=>ids.has(c.id));
+    if(!canPlay(selected,game.tableCombo)){if(actionId)await actionsRef(currentRoomCode).doc(actionId).set({processed:true,rejected:true,reason:'Jogada inválida'},{merge:true});return;}
+    const player=currentPlayers.find(p=>p.uid===uid); const remaining=hand.filter(c=>!ids.has(c.id)); const combo={power:Number(selected[0].power),count:selected.length,cards:selected.map(c=>({...c})),playerUid:uid,playerName:player?.name||'Jogador',turn:Number(game.turnCounter||0)+1};
+    game.turnCounter=combo.turn; game.tableCombo=combo; game.tableOwnerUid=uid; game.passes={}; game.history=[...(game.history||[]),{type:'play',playerUid:uid,playerName:combo.playerName,description:desc(combo),turn:combo.turn}].slice(-40); game.lastMessage=`${combo.playerName} jogou ${desc(combo)}.`;
+    if(remaining.length===0&&!(game.finishedOrder||[]).includes(uid)){game.finishedOrder=[...(game.finishedOrder||[]),uid]; game.lastMessage+=` ${combo.playerName} acabou as cartas!`;}
+    const batch=db.batch(); batch.set(handRef(currentRoomCode,uid),{cards:sortCards(remaining),updatedAt:ts()},{merge:true}); batch.set(playerRef(currentRoomCode,uid),{cardCount:remaining.length},{merge:true});
+    const unfinished=unfinishedUids(game);
+    if(unfinished.length<=1){if(unfinished[0]&&!game.finishedOrder.includes(unfinished[0]))game.finishedOrder.push(unfinished[0]); game.phase='finished'; game.turnUid=''; game.lastMessage='Fim da partida online!';}
+    else if(isBreaker(combo)){batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); window.setTimeout(()=>hostClear(uid),850); return;}
+    else{game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||'';}
+    batch.set(roomRef(currentRoomCode),{game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit();
+  }
+  async function hostPass(uid,actionId=null){
+    if(!isHost()||!currentRoom?.game)return; const game=clone(currentRoom.game); if(uid!==game.turnUid||!game.tableCombo)return;
+    const player=currentPlayers.find(p=>p.uid===uid); game.passes={...(game.passes||{}),[uid]:true}; game.turnCounter=Number(game.turnCounter||0)+1; game.history=[...(game.history||[]),{type:'pass',playerUid:uid,playerName:player?.name||'Jogador',turn:game.turnCounter}].slice(-40); game.lastMessage=`${player?.name||'Jogador'} passou.`;
+    const challengers=unfinishedUids(game).filter(x=>x!==game.tableOwnerUid); const everyone=challengers.length===0||challengers.every(x=>game.passes?.[x]); const batch=db.batch();
+    if(everyone){batch.set(roomRef(currentRoomCode),{game,publicMessage:'A corte observa a última jogada antes da mesa limpar.',updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); window.setTimeout(()=>hostClear(game.tableOwnerUid),850); return;}
+    game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit();
+  }
+  async function hostClear(ownerUid){
+    if(!isHost())return; const snap=await roomRef(currentRoomCode).get(); if(!snap.exists)return; const game=clone(snap.data().game||{}); if(game.phase!=='playing')return;
+    game.tableCombo=null; game.tableOwnerUid=''; game.passes={}; const unfinished=unfinishedUids(game);
+    if(!unfinished.length){game.phase='finished'; game.turnUid='';} else if(ownerUid&&unfinished.includes(ownerUid))game.turnUid=ownerUid; else game.turnUid=nextUid(game,ownerUid||game.turnUid,true)||unfinished[0];
+    game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; game.lastMessage=game.phase==='finished'?'Fim da partida online!':`Mesa limpa. ${game.turnName||'Jogador'} inicia a nova rodada.`;
+    await roomRef(currentRoomCode).set({game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true});
+  }
+  function scheduleBotIfNeeded(){ window.clearTimeout(botTimer); if(!isHost()||!currentRoom?.game||currentRoom.game.phase!=='playing')return; const uid=currentRoom.game.turnUid; if(!String(uid).startsWith('bot-'))return; botTimer=window.setTimeout(async()=>{const snap=await handRef(currentRoomCode,uid).get(); const hand=snap.exists?sortCards(snap.data().cards||[]):[]; if(!hand.length)return; const cards=botChoice(hand,currentRoom.game.tableCombo); if(cards.length)await hostPlay(uid,cards.map(c=>c.id)); else if(currentRoom.game.tableCombo)await hostPass(uid);},900+Math.floor(Math.random()*700));}
+  function botChoice(hand,table){ const g=new Map(); hand.forEach(c=>{const p=Number(c.power); if(!g.has(p))g.set(p,[]); g.get(p).push(c);}); const cand=[]; g.forEach((cards,p)=>{if(!table)cand.push(cards.slice(0,1)); else if(cards.length>=table.count&&Number(p)>Number(table.power))cand.push(cards.slice(0,table.count));}); if(!cand.length)return[]; cand.sort((a,b)=>Number(a[0].power)-Number(b[0].power)||a.length-b.length); if(table){const nb=cand.filter(c=>Number(c[0].power)<cardPower('2')); if(nb.length)return nb[0];} return cand[0];}
+  async function leaveRoom(){ if(currentRoomCode&&currentUser){try{if(currentRoom?.phase==='lobby')await playerRef(currentRoomCode,currentUser.uid).delete(); else await playerRef(currentRoomCode,currentUser.uid).set({connected:false,lastSeen:ts()},{merge:true});}catch(e){console.warn(e);}} detachRoom(); currentRoomCode=''; currentRoom=null; currentPlayers=[]; currentHand=[]; onlineMode=false; selectedCardIds.clear(); renderLobby(); setStatus('Você saiu da sala.','ok');}
+  async function copyRoomCode(){ if(!currentRoomCode)return; try{await navigator.clipboard.writeText(currentRoomCode); setStatus(`Código ${currentRoomCode} copiado.`,'ok');}catch(e){setStatus(`Código da sala: ${currentRoomCode}`,'ok');}}
+
+  document.addEventListener('click',e=>{const gameAction=e.target.closest('[data-action]')?.dataset.action; if(gameAction==='open-online'){openOnlineModal(); return;} const b=e.target.closest('[data-online-action]'); if(!b)return; const a=b.dataset.onlineAction; if(a==='close-online')closeOnlineModal(); if(a==='create-room')createRoom(); if(a==='join-room')joinRoom(); if(a==='toggle-ready')toggleReady(); if(a==='start-online')startOnline(); if(a==='leave-room')leaveRoom(); if(a==='copy-room')copyRoomCode();});
+  window.addEventListener('DOMContentLoaded',()=>{collectDom(); dom.playButton?.addEventListener('click',e=>{if(!onlineMode)return; e.preventDefault(); e.stopImmediatePropagation(); sendPlay();},true); dom.passButton?.addEventListener('click',e=>{if(!onlineMode)return; e.preventDefault(); e.stopImmediatePropagation(); sendPass();},true);});
+  window.addEventListener('beforeunload',()=>{if(currentRoomCode&&currentUser)playerRef(currentRoomCode,currentUser.uid).set({connected:false,lastSeen:ts()},{merge:true});});
+  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable};
 })();

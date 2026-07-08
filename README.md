@@ -142,3 +142,14 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - A sala pode iniciar quando houver pelo menos 3 participantes somando humanos e bots.
 - Quando o anfitrião inicia, todos os jogadores são levados para a mesa online.
 - A mesa online ainda é uma tela de transição; a próxima etapa conectará distribuição, mãos privadas e turnos sincronizados.
+
+## v0.5.3
+- Partida online jogável inicial.
+- Host inicia, embaralha, distribui e valida a partida.
+- Mãos privadas em `rooms/{sala}/hands/{uid}`.
+- Jogadores enviam ações para `actions`; host processa e valida.
+- Mesa pública sincronizada via documento da sala.
+- Botões Jogar e Passar conectados no modo online.
+- Bots da sala são adicionados e controlados pelo host.
+- Ranking online básico ao final.
+- Novas regras Firestore em `docs/FIREBASE_SETUP.md`.

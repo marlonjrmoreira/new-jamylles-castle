@@ -353,3 +353,23 @@ button:disabled{cursor:not-allowed; opacity:.55}
 .onlineTableNotice small{
     color:rgba(255,247,223,.64);
 }
+
+/* === v0.5.3 — Partida online jogável === */
+.onlineTableNotice{
+    width:min(92%,520px);
+    display:grid;
+    gap:10px;
+    text-align:center;
+    padding:18px;
+    border:1px solid rgba(255,231,168,.28);
+    border-radius:20px;
+    background:rgba(8,2,18,.62);
+    color:rgba(255,247,223,.86);
+    box-shadow:0 12px 40px rgba(0,0,0,.35);
+}
+.onlineTableNotice strong{
+    color:var(--gold-strong);
+    font-family:'Cinzel Decorative', Georgia, 'Times New Roman', serif;
+    font-size:20px;
+}
+.onlineTableNotice small{ color:rgba(255,247,223,.64); }
