@@ -198,3 +198,11 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - Salas finalizadas ou abandonadas por mais de 30 minutos podem ser recicladas.
 - Ao reciclar, o jogo tenta limpar `players`, `hands`, `actions`, `voiceParticipants` e `voiceSignals`.
 - Novas Rules do Firestore em `docs/FIREBASE_SETUP.md`.
+
+
+## v0.6.2
+- Corrigida confusão no lobby do segundo jogador.
+- O aviso de configuração some depois que o jogador entra na sala.
+- O botão `Estou pronto` fica no topo do lobby, antes da lista de jogadores e da voz.
+- Para não anfitriões, o botão `Iniciar partida` fica oculto.
+- Mensagem do lobby agora orienta claramente: jogador clica em `Estou pronto`; anfitrião clica em `Iniciar partida`.

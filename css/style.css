@@ -472,3 +472,43 @@ button:disabled{cursor:not-allowed; opacity:.55}
         padding:0 6px;
     }
 }
+
+
+/* === v0.6.2 — lobby mais claro === */
+#onlineBridgeNote[hidden]{display:none;}
+.lobbyPrimaryActions{
+    grid-template-columns:1fr;
+    margin:10px 0 12px;
+}
+.lobbyPrimaryActions .menuButton{
+    min-height:44px;
+}
+.lobbyPrimaryActions .readyAction{
+    background:linear-gradient(180deg, rgba(46,160,102,.95), rgba(22,82,54,.95));
+    border-color:rgba(168,255,207,.58);
+    color:#ecfff4;
+}
+.lobbyPrimaryActions .readyAction.readyOn{
+    background:linear-gradient(180deg, rgba(255,211,93,.96), rgba(143,92,14,.96));
+    color:#2a1600;
+}
+.lobbyPrimaryActions .hostStartAction{
+    background:linear-gradient(180deg, rgba(110,45,174,.95), rgba(49,11,97,.96));
+}
+.lobbyPrimaryActions .hostStartAction[hidden]{
+    display:none;
+}
+.lobbyPrimaryActions .leaveAction{
+    min-height:38px;
+}
+.lobbyInstruction strong{
+    color:#fff0bc;
+}
+@media (min-width:560px){
+    .lobbyPrimaryActions{
+        grid-template-columns:1fr 1fr;
+    }
+    .lobbyPrimaryActions .leaveAction{
+        grid-column:1 / -1;
+    }
+}
