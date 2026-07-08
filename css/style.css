@@ -675,3 +675,8 @@ button:disabled{cursor:not-allowed; opacity:.55}
     box-shadow:0 0 18px rgba(46,204,113,.18);
 }
 .readyGuide.allReady strong::before{content:'✓ ';}
+
+
+/* === v0.6.7 — reforço de entrada na mesa online === */
+body.onlineGameActive #gameScreen.active{display:grid;}
+body.onlineGameActive #menuScreen{display:none;}

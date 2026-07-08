@@ -229,3 +229,11 @@
 - O botão não alterna mais para “não pronto”, evitando travar o início da partida.
 - Se um documento antigo entrar como `ready:false`, o jogo corrige automaticamente para `ready:true` no lobby.
 - O anfitrião continua vendo claramente se há alguém pendente, mas o fluxo normal não depende mais do convidado encontrar o botão.
+
+
+## v0.6.7
+- Corrigido caso crítico em que o anfitrião entrava na mesa, mas o convidado permanecia na tela inicial.
+- Adicionado verificador direto no Firestore para detectar `phase: playing` mesmo se o listener em tempo real atrasar.
+- Ao iniciar, cada jogador recebe `gameStarted` e `startSignal` no próprio documento de jogador.
+- O convidado é forçado para a mesa quando a sala, a mão ou o sinal do jogador indicam partida iniciada.
+- A tela inicial é ocultada com reforço de CSS quando a mesa online é ativada.

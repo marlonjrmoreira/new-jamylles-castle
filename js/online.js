@@ -27,7 +27,7 @@
   let currentRoomCode = '', currentRoom = null, currentPlayers = [], currentHand = [];
   let selectedCardIds = new Set(), onlineMode = false, processingActions = false;
   let lastSfxTurnCounter = -1, lastSfxPhase = '';
-  let roomUnsub, playersUnsub, handUnsub, actionsUnsub, heartbeatTimer, botTimer;
+  let roomUnsub, playersUnsub, handUnsub, actionsUnsub, heartbeatTimer, botTimer, transitionTimer;
   const dom = {};
 
   function qs(s){ return document.querySelector(s); }
@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.6.6: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.6.7: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -214,25 +214,56 @@
   function attachRoom(code){
     detachRoom(); currentRoomCode=code;
     if(dom.homeLobbyPanel) dom.homeLobbyPanel.hidden=false; if(dom.lobby) dom.lobby.hidden=false; if(dom.bridgeNote) dom.bridgeNote.hidden=true; if(dom.lobbyTitle) dom.lobbyTitle.textContent=`Sala ${code}`;
-    roomUnsub=roomRef(code).onSnapshot(s=>{ currentRoom=s.exists?s.data():null; if(!currentRoom){setStatus('A sala foi encerrada.','error');detachRoom();renderLobby();return;} if(currentRoom.phase==='playing'||currentRoom.phase==='finished') enterOnlineTable(); renderLobby(); renderOnlineGame(); if(isHost()) setupHostActionListener(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler a sala: ${e.message}`,'error'));
+    roomUnsub=roomRef(code).onSnapshot(s=>{ currentRoom=s.exists?s.data():null; if(!currentRoom){setStatus('A sala foi encerrada.','error');detachRoom();renderLobby();return;} if(shouldEnterGame(currentRoom)){ forceEnterIfStarted('room-snapshot'); return; } renderLobby(); renderOnlineGame(); if(isHost()) setupHostActionListener(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler a sala: ${e.message}`,'error'));
     playersUnsub=roomRef(code).collection('players').orderBy('joinedAt','asc').onSnapshot(s=>{
       currentPlayers=s.docs.map(d=>({id:d.id,...d.data()}));
       const me=currentPlayers.find(p=>p.uid===currentUser?.uid);
+      if(me?.gameStarted && !onlineMode){ forceEnterIfStarted('player-start-signal'); }
       if(me && !me.isHost && !me.isBot && currentRoom?.phase==='lobby' && me.ready!==true){
         playerRef(code,currentUser.uid).set({ready:true,lastSeen:ts()},{merge:true}).catch(console.warn);
       }
+      if(currentRoom && shouldEnterGame(currentRoom)){ forceEnterIfStarted('players-snapshot'); return; }
       renderLobby(); renderOnlineGame(); if(isHost()) scheduleBotIfNeeded();
     }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
-    handUnsub=handRef(code,currentUser.uid).onSnapshot(s=>{ currentHand=s.exists?sortCards(s.data().cards||[]):[]; renderOnlineGame(); }, ()=>{});
+    handUnsub=handRef(code,currentUser.uid).onSnapshot(s=>{ currentHand=s.exists?sortCards(s.data().cards||[]):[]; if(s.exists && currentRoom && shouldEnterGame(currentRoom)) forceEnterIfStarted('hand-snapshot'); renderOnlineGame(); }, ()=>{});
     heartbeatTimer=window.setInterval(()=>{ if(currentRoomCode&&currentUser) playerRef(currentRoomCode,currentUser.uid).set({connected:true,lastSeen:ts()},{merge:true}).catch(console.warn); },15000);
+    startTransitionWatcher();
   }
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).orderBy('createdAt','asc').onSnapshot(s=>processActionsAsHost(s.docs.map(d=>({id:d.id,...d.data()}))), e=>setStatus(`Erro nas ações: ${e.message}`,'error'));
   }
+  function shouldEnterGame(room){
+    return Boolean(room && (room.phase === 'playing' || room.phase === 'finished' || room.game?.phase === 'playing' || room.game?.phase === 'finished'));
+  }
+  async function forceEnterIfStarted(source='sync'){
+    if(!currentRoomCode || onlineMode) return false;
+    try{
+      let room = currentRoom;
+      if(!shouldEnterGame(room)){
+        const snap = await roomRef(currentRoomCode).get();
+        if(!snap.exists) return false;
+        room = snap.data() || null;
+        currentRoom = room;
+      }
+      if(!shouldEnterGame(room)) return false;
+      setStatus('Partida iniciada. Entrando na mesa...', 'ok');
+      enterOnlineTable(true);
+      return true;
+    }catch(error){
+      console.warn('Falha ao forçar entrada na mesa:', error);
+      return false;
+    }
+  }
+  function startTransitionWatcher(){
+    window.clearInterval(transitionTimer);
+    transitionTimer = window.setInterval(() => {
+      forceEnterIfStarted('poll');
+    }, 900);
+  }
   function detachRoom(){
     if(roomUnsub)roomUnsub(); if(playersUnsub)playersUnsub(); if(handUnsub)handUnsub(); if(actionsUnsub)actionsUnsub();
-    roomUnsub=playersUnsub=handUnsub=actionsUnsub=null; window.clearInterval(heartbeatTimer); window.clearTimeout(botTimer);
+    roomUnsub=playersUnsub=handUnsub=actionsUnsub=null; window.clearInterval(heartbeatTimer); window.clearInterval(transitionTimer); window.clearTimeout(botTimer);
   }
 
   function renderLobby(){
@@ -297,14 +328,25 @@
     const participants=[...humans.map(p=>({uid:p.uid,name:p.name||'Jogador',isBot:false})),...bots.map(b=>({uid:b.uid,name:b.name,isBot:true}))];
     const hands=new Map(participants.map(p=>[p.uid,[]]));
     shuffle(createDeck(Number(currentRoom.deckCount||1),Boolean(currentRoom.includeJokers))).forEach((card,i)=>hands.get(participants[i%participants.length].uid).push(card));
-    participants.forEach(p=>{ const cards=sortCards(hands.get(p.uid)||[]); batch.set(handRef(currentRoomCode,p.uid),{uid:p.uid,cards,updatedAt:ts()},{merge:true}); batch.set(playerRef(currentRoomCode,p.uid),{cardCount:cards.length,finishedPosition:null,roleTitle:'',hasPassed:false},{merge:true}); });
+    participants.forEach(p=>{ const cards=sortCards(hands.get(p.uid)||[]); batch.set(handRef(currentRoomCode,p.uid),{uid:p.uid,cards,updatedAt:ts()},{merge:true}); batch.set(playerRef(currentRoomCode,p.uid),{cardCount:cards.length,finishedPosition:null,roleTitle:'',hasPassed:false,gameStarted:true,startSignal:firebase.firestore.FieldValue.increment(1),gameStartedAt:ts()},{merge:true}); });
     const starter=participants[Math.floor(Math.random()*participants.length)];
     const game={phase:'playing',turnOrder:participants.map(p=>p.uid),turnUid:starter.uid,turnName:starter.name,tableCombo:null,tableOwnerUid:'',passes:{},history:[],finishedOrder:[],turnCounter:0,lastMessage:`${starter.name} foi sorteado e inicia a partida online.`};
     batch.set(roomRef(currentRoomCode),{phase:'playing',game,startedAt:ts(),updatedAt:ts(),publicMessage:game.lastMessage,gameStateVersion:firebase.firestore.FieldValue.increment(1)},{merge:true});
     await batch.commit();
   }
 
-  function enterOnlineTable(){ if(!currentRoom||!currentRoomCode)return; stopMenuMusic(); window.jcSfx?.stopAll?.(); onlineMode=true; if(dom.modal)dom.modal.hidden=true; if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true; dom.menuScreen?.classList.remove('active'); dom.gameScreen?.classList.add('active'); renderOnlineGame(); }
+  function enterOnlineTable(force=false){
+    if(!currentRoomCode) return;
+    if(!currentRoom && !force) return;
+    stopMenuMusic(); window.jcSfx?.stopAll?.(); onlineMode=true;
+    if(dom.modal)dom.modal.hidden=true;
+    if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true;
+    dom.menuScreen?.classList.remove('active');
+    dom.gameScreen?.classList.add('active');
+    document.body.classList.add('onlineGameActive');
+    window.scrollTo?.(0,0);
+    renderOnlineGame();
+  }
   function unfinishedUids(game){ const fin=new Set(game.finishedOrder||[]); return (game.turnOrder||[]).filter(uid=>!fin.has(uid)); }
   function nextUid(game,fromUid,includePassed=false){ const order=game.turnOrder||[]; const start=Math.max(0,order.indexOf(fromUid)); const fin=new Set(game.finishedOrder||[]); for(let o=1;o<=order.length;o++){const uid=order[(start+o)%order.length]; if(fin.has(uid))continue; if(!includePassed&&game.passes?.[uid])continue; return uid;} return order.find(uid=>!fin.has(uid))||''; }
 
@@ -443,9 +485,7 @@
   window.addEventListener('beforeunload',()=>{if(currentRoomCode&&currentUser)playerRef(currentRoomCode,currentUser.uid).set({connected:false,lastSeen:ts()},{merge:true});});
 
   window.setInterval(() => {
-    if(currentRoom && (currentRoom.phase === 'playing' || currentRoom.phase === 'finished') && !onlineMode){
-      enterOnlineTable();
-    }
+    forceEnterIfStarted('global-watch');
   }, 800);
 
   window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable};
