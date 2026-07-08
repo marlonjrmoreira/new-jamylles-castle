@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.6.8: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.0: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -231,7 +231,14 @@
   }
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).orderBy('createdAt','asc').onSnapshot(s=>processActionsAsHost(s.docs.map(d=>({id:d.id,...d.data()}))), e=>setStatus(`Erro nas ações: ${e.message}`,'error'));
+    // v0.7.0: sem orderBy no Firestore para não exigir índice composto.
+    // A ordenação por createdAt acontece localmente no navegador do anfitrião.
+    actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
+      const pending=s.docs
+        .map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>timestampToMs(a.createdAt)-timestampToMs(b.createdAt));
+      processActionsAsHost(pending);
+    }, e=>setStatus(`Erro nas ações: ${e.message}`,'error'));
   }
   function shouldEnterGame(room){
     return Boolean(room && (room.phase === 'playing' || room.phase === 'finished' || room.game?.phase === 'playing' || room.game?.phase === 'finished'));
@@ -488,5 +495,5 @@
     forceEnterIfStarted('global-watch');
   }, 800);
 
-  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable};
+  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom};
 })();

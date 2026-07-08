@@ -1570,6 +1570,38 @@ function testCastleSound(){
     }
 }
 
+function syncSoundToggleButtons(){
+    const enabled = document.querySelector('#soundEnabled')?.checked !== false && castleAudio.enabled !== false;
+    document.querySelectorAll('[data-action="sound-toggle"]').forEach(button => {
+        button.textContent = enabled ? '🔊' : '🔇';
+        button.title = enabled ? 'Som ligado — tocar para mutar' : 'Som desligado — tocar para ativar';
+        button.classList.toggle('muted', !enabled);
+    });
+}
+
+function setCastleSoundEnabled(enabled){
+    const checkbox = document.querySelector('#soundEnabled');
+    if(checkbox) checkbox.checked = Boolean(enabled);
+    castleAudio.configure(Boolean(enabled));
+    if(!enabled){
+        stopMenuTheme();
+        castleAudio.stopAll();
+    }else{
+        // Na mesa não existe trilha de fundo: ao reativar, toca apenas um efeito curto.
+        if(screens.menu?.classList.contains('active')) startMenuTheme();
+        else{
+            stopMenuTheme();
+            castleAudio.ui();
+        }
+    }
+    syncSoundToggleButtons();
+}
+
+function toggleCastleSound(){
+    const currentlyEnabled = document.querySelector('#soundEnabled')?.checked !== false && castleAudio.enabled !== false;
+    setCastleSoundEnabled(!currentlyEnabled);
+}
+
 function showPlannedOnlineInfo(){
     const settings = getMenuSettings();
     alert(`Sala planejada: ${settings.roomName}\nSenha: ${settings.passwordProtected ? 'ativada' : 'desativada'}\nObservadores: ${settings.allowObservers ? 'permitidos com mãos ocultas' : 'bloqueados'}\nDesconexão: redistribuir cartas após 60s`);
@@ -1621,19 +1653,19 @@ document.addEventListener('click', event => {
     if(action === 'observer-preview') showObserverPreview();
     if(action === 'rules') showRules();
     if(action === 'sound-test') testCastleSound();
+    if(action === 'sound-toggle') toggleCastleSound();
     if(action === 'rematch') startRematch();
     if(action === 'back-menu') backToMenu();
 });
 
 
 document.querySelector('#soundEnabled')?.addEventListener('change', event => {
-    castleAudio.configure(event.target.checked);
-    if(event.target.checked) startMenuTheme();
-    else stopMenuTheme();
+    setCastleSoundEnabled(event.target.checked);
 });
 
 window.addEventListener('DOMContentLoaded', () => {
     if(dom.menuThemeAudio){ dom.menuThemeAudio.volume = 1.0; dom.menuThemeAudio.loop = true; dom.menuThemeAudio.load(); }
+    syncSoundToggleButtons();
     window.setTimeout(() => {
         document.querySelector('#menuScreen')?.classList.add('introComplete');
     }, 1500);

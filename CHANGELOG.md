@@ -249,3 +249,20 @@
 - Mão do jogador em trilho horizontal/fan, melhor para celular e para muitas cartas.
 - Botões Jogar/Passar em estilo medieval maior e mais tátil.
 - Sem mudança nas Rules do Firebase.
+
+
+## v0.6.9
+- Corrigido erro do Firestore: `The query requires an index`.
+- A consulta de ações da partida não usa mais `orderBy('createdAt')` no servidor.
+- As ações pendentes agora são ordenadas localmente no navegador do anfitrião.
+- Não é necessário criar índice manual no Firebase para esta correção.
+
+
+## v0.7.0
+- Corrigido botão de som da mesa: agora ele liga/desliga de verdade, sem reiniciar a trilha.
+- A trilha continua restrita ao menu; na mesa ficam apenas efeitos sonoros curtos.
+- Removido o botão pequeno `Menu` da mesa para evitar tela preta durante partidas online.
+- O dock de voz da mesa agora só aparece quando o jogador já está conectado à voz.
+- Erros de entrada/saída/mute da voz são tratados sem travar o fluxo da partida.
+- A voz continua sendo preparada no lobby ao criar/entrar na sala.
+- Sem mudança nas Rules do Firebase.

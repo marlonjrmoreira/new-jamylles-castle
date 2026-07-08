@@ -849,3 +849,20 @@
     .controls{gap:7px; padding:0 4px;}
     .controlButton{font-size:16px;}
 }
+
+
+/* === v0.7.0 — estabilização dos botões da mesa === */
+.topbarSpacer{
+    width:42px;
+    height:42px;
+    display:block;
+}
+.soundHudButton.muted{
+    opacity:.72;
+    filter:saturate(.55) brightness(.82);
+    border-color:rgba(255,255,255,.22);
+}
+.voiceHudButton{
+    pointer-events:none;
+    opacity:.55;
+}

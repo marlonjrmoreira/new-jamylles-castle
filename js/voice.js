@@ -1,4 +1,4 @@
-/* Jamylle's Castle v0.6.5 — Chat de voz WebRTC
+/* Jamylle's Castle v0.7.0 — Chat de voz WebRTC
    Usa Firebase como sinalização e WebRTC para áudio P2P.
 */
 (() => {
@@ -182,7 +182,7 @@
         const code = getRoomCode();
         const inGame = qs('#gameScreen')?.classList.contains('active');
         if(dom.voicePanel) dom.voicePanel.hidden = !code;
-        if(dom.voiceDock) dom.voiceDock.hidden = !code || !inGame;
+        if(dom.voiceDock) dom.voiceDock.hidden = !code || !inGame || !joined;
         if(!code){
             status('Fora da voz');
         }else if(joined){
@@ -615,9 +615,9 @@
         const button = event.target.closest('[data-voice-action]');
         if(!button) return;
         const action = button.dataset.voiceAction;
-        if(action === 'join') joinVoice();
-        if(action === 'mute') toggleMute();
-        if(action === 'leave') leaveVoice();
+        if(action === 'join') joinVoice().catch(error => { console.warn(error); status('Falha ao entrar na voz'); });
+        if(action === 'mute') toggleMute().catch(error => { console.warn(error); status('Falha ao mutar'); });
+        if(action === 'leave') leaveVoice().catch(error => { console.warn(error); status('Falha ao sair da voz'); });
     });
 
     window.addEventListener('jc:auto-voice', autoJoinFromRoomEvent);
