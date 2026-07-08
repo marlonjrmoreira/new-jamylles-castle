@@ -127,3 +127,44 @@
 @media (max-width:760px){
     .card.royalTwo .cardSymbol{font-size:30px;}
 }
+
+
+/* === v0.6.8 — cartas estilo pergaminho da mesa medieval === */
+.card{
+    width:clamp(64px, 18vw, 82px);
+    height:clamp(92px, 25vw, 116px);
+    border-radius:10px;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,.42), transparent 22%),
+        radial-gradient(circle at 50% 30%, #fff0c8 0%, #ead3a5 62%, #c7a976 100%);
+    border:2px solid #6d4b24;
+    box-shadow:0 10px 18px rgba(0,0,0,.38), inset 0 0 0 3px rgba(255,248,220,.22);
+}
+.card::after{
+    border-color:rgba(93,60,25,.26);
+    inset:6px;
+}
+.cardCorner{
+    color:#5c3718;
+    font-weight:900;
+    text-shadow:0 1px 0 rgba(255,255,255,.35);
+}
+.cardSymbol{
+    filter:drop-shadow(0 2px 1px rgba(0,0,0,.22));
+}
+.tableCards .card{
+    width:clamp(72px, 20vw, 92px);
+    height:clamp(102px, 28vw, 130px);
+}
+@media (max-height:760px){
+    .card{
+        width:clamp(54px, 15vw, 68px);
+        height:clamp(78px, 21vw, 98px);
+    }
+    .tableCards .card{
+        width:clamp(60px, 17vw, 76px);
+        height:clamp(86px, 24vw, 108px);
+    }
+    .cardCorner{font-size:13px;}
+    .cardSymbol{font-size:30px;}
+}

@@ -136,7 +136,7 @@
                     </div>
                 </section>
 
-                <span class="versionTag">v0.6.7 — pronto automático</span>
+                <span class="versionTag">v0.6.8 — mesa medieval</span>
             </section>
         </div>
     </main>
@@ -144,12 +144,13 @@
     <main id="gameScreen" class="screen" aria-label="Mesa do jogo">
         <section class="gameShell">
             <header class="gameTopbar">
-                <div>
+                <button class="roundHudButton soundHudButton" data-action="sound-test" type="button" title="Som">🔊</button>
+                <div class="gameTitlePlaque">
+                    <span>♛</span>
                     <strong>Jamylle's Castle</strong>
-                    <span id="roomInfo">Sala local</span>
                 </div>
+                <button class="roundHudButton voiceHudButton voiceJoinButton" data-voice-action="join" type="button" title="Voz">🎙</button>
                 <div class="topbarActions">
-                    <button class="miniButton" data-action="observer-preview">Observador</button>
                     <button class="miniButton" data-action="back-menu">Menu</button>
                 </div>
             </header>
@@ -169,14 +170,20 @@
             </section>
 
             <section class="playerPanel">
+                <div class="selectionMessage" id="selectionMessage">Sua mão aparecerá aqui.</div>
+                <div class="playerHand" id="playerHand" aria-label="Suas cartas"></div>
                 <div class="controls">
                     <button id="playButton" class="controlButton primary" type="button" disabled>Jogar</button>
                     <button id="passButton" class="controlButton danger" type="button" disabled>Passar</button>
                     <button id="rematchButton" class="controlButton" type="button" hidden>Revanche</button>
                 </div>
-                <div class="selectionMessage" id="selectionMessage">Sua mão aparecerá aqui.</div>
-                <div class="playerHand" id="playerHand" aria-label="Suas cartas"></div>
             </section>
+
+            <footer class="gameInfoStrip">
+                <span>🏰 <strong id="roomInfo">Sala local</strong></span>
+                <span>⚔ <strong>Jogatina</strong></span>
+                <span>💬 <strong>Voz/Chat</strong></span>
+            </footer>
         </section>
     </main>
 

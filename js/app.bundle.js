@@ -1174,16 +1174,20 @@ function renderGame(){
 
 function renderPlayerSummary(){
     dom.playersSummary.innerHTML = '';
+    const visiblePlayers = currentGame.players.filter(player => !player.isObserver);
     currentGame.players.forEach((player, index) => {
         if(player.isObserver) return;
         const item = document.createElement('article');
         item.className = 'playerBadge';
+        item.classList.add(index === currentGame.humanIndex ? 'localPlayerBadge' : 'opponentBadge');
+        if(visiblePlayers.length > 10) item.classList.add('ultraCompact');
+        else if(visiblePlayers.length > 6) item.classList.add('compact');
         if(index === currentGame.currentPlayerIndex && currentGame.phase === 'playing') item.classList.add('active');
         if(player.hasPassed) item.classList.add('passed');
         if(player.finishedPosition !== null) item.classList.add('finished');
         item.innerHTML = `
             <strong>${escapeHtml(player.name)}</strong>
-            <span>${player.hand.length} cartas</span>
+            <span class="cardsCount">🂠 ${player.hand.length}</span>
             ${player.role ? `<em>${escapeHtml(player.role)}</em>` : ''}
         `;
         dom.playersSummary.appendChild(item);

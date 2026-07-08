@@ -237,3 +237,15 @@
 - Ao iniciar, cada jogador recebe `gameStarted` e `startSignal` no próprio documento de jogador.
 - O convidado é forçado para a mesa quando a sala, a mão ou o sinal do jogador indicam partida iniciada.
 - A tela inicial é ocultada com reforço de CSS quando a mesa online é ativada.
+
+
+## v0.6.8
+- Nova mesa medieval responsiva inspirada no mockup aprovado.
+- Fundo do pátio/castelo aplicado como cenário funcional da jogatina.
+- HUD com placa superior, botões circulares de som/voz e barra inferior temática.
+- Jogadores exibidos em slots compactos para suportar até 20 participantes.
+- Jogador da vez recebe destaque dourado; jogador local recebe tratamento diferenciado.
+- Área central das cartas reposicionada sobre o pátio, com leitura mais limpa da jogada.
+- Mão do jogador em trilho horizontal/fan, melhor para celular e para muitas cartas.
+- Botões Jogar/Passar em estilo medieval maior e mais tátil.
+- Sem mudança nas Rules do Firebase.

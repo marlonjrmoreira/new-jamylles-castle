@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.6.7: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.6.8: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -380,7 +380,7 @@
     }
   }
 
-  function renderPlayers(game){ if(!dom.playersSummary)return; const fin=new Set(game.finishedOrder||[]); dom.playersSummary.innerHTML=currentPlayers.map(p=>{const idx=(game.finishedOrder||[]).indexOf(p.uid); const role=idx>=0?rankName(idx,currentPlayers.length):p.isBot?'IA':''; return `<article class="playerBadge ${p.uid===game.turnUid?'active':''} ${game.passes?.[p.uid]?'passed':''} ${fin.has(p.uid)?'finished':''}"><strong>${esc(p.name||'Jogador')}</strong><span>${Number(p.cardCount||0)} cartas</span>${role?`<em>${esc(role)}</em>`:''}</article>`;}).join('');}
+  function renderPlayers(game){ if(!dom.playersSummary)return; const fin=new Set(game.finishedOrder||[]); const total=currentPlayers.length; dom.playersSummary.innerHTML=currentPlayers.map(p=>{const idx=(game.finishedOrder||[]).indexOf(p.uid); const role=idx>=0?rankName(idx,total):p.isBot?'IA':(p.uid===currentRoom?.hostUid?'Host':''); const isMe=p.uid===currentUser?.uid; return `<article class="playerBadge ${p.uid===game.turnUid?'active':''} ${game.passes?.[p.uid]?'passed':''} ${fin.has(p.uid)?'finished':''} ${isMe?'localPlayerBadge':'opponentBadge'} ${total>10?'ultraCompact':total>6?'compact':''}"><strong>${esc(p.name||'Jogador')}</strong><span class="cardsCount">🂠 ${Number(p.cardCount||0)}</span>${role?`<em>${esc(role)}</em>`:''}</article>`;}).join('');}
   function renderTable(game){
     if(!dom.tableCards)return; dom.tableCards.innerHTML='';
     if(!game.tableCombo){dom.tableCards.innerHTML='<p class="emptyTable">Mesa livre</p>';return;}
