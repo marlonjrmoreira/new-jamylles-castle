@@ -297,7 +297,7 @@
 - Mantida compatibilidade com Firebase atual, sem necessidade de mudar Rules.
 
 
-## v0.7.4
+## v0.7.5
 - Correção focada na entrada do convidado na mesa quando o anfitrião inicia a partida.
 - Adicionado cache-busting em CSS/JS locais (`?v=074`) para impedir celular/navegador de carregar `online.js` antigo.
 - Entrada na mesa agora força diretamente as classes, estilos e estado visual da tela de jogo.

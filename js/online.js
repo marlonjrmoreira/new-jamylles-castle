@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.4: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.5: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -208,7 +208,14 @@
     if(room.phase!=='lobby'){ setStatus('Esta sala já iniciou. Entrada em andamento virá depois.', 'error'); return; }
     await playerRef(code,currentUser.uid).set({uid:currentUser.uid,name:getPlayerName(),isHost:currentUser.uid===room.hostUid,isBot:false,ready:true,role:currentUser.uid===room.hostUid?'host':'player',connected:true,cardCount:0,joinedAt:ts(),lastSeen:ts()},{merge:true});
     await roomRef(code).set({updatedAt:ts()},{merge:true});
-    attachRoom(code); sfx('ui'); requestAutoVoice('room-joined'); setStatus(`Você entrou na sala ${code}. Você já está pronto; aguarde o anfitrião iniciar.`, 'ok'); window.setTimeout(()=>dom.homeLobbyPanel?.scrollIntoView?.({block:'center'}),120);
+    currentRoom = {...room, updatedAt:ts()};
+    attachRoom(code); sfx('ui'); requestAutoVoice('room-joined');
+    setStatus(`Você entrou na sala ${code}. Você já está na mesa; aguarde o anfitrião iniciar.`, 'ok');
+    if(currentUser.uid !== room.hostUid){
+      window.setTimeout(()=>enterOnlineTable(true), 120);
+    }else{
+      window.setTimeout(()=>dom.homeLobbyPanel?.scrollIntoView?.({block:'center'}),120);
+    }
   }
 
   function attachRoom(code){
@@ -256,7 +263,7 @@
   }
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.4: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.5: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -292,7 +299,10 @@
       if(!snap.exists) return false;
       const room = snap.data() || null;
       currentRoom = room;
-      if(!shouldEnterGame(room)) return false;
+      if(!shouldEnterGame(room)){
+        if(onlineMode){ ensureOnlineTableVisible(); renderOnlineGame(); }
+        return false;
+      }
       if(!onlineMode) setStatus('Partida iniciada. Entrando na mesa...', 'ok');
       enterOnlineTable(true);
       return true;
@@ -335,10 +345,7 @@
     window.clearInterval(transitionTimer);
     transitionTimer = window.setInterval(() => {
       if(!currentRoomCode) return;
-      if(onlineMode){
-        ensureOnlineTableVisible();
-        return;
-      }
+      if(onlineMode) ensureOnlineTableVisible();
       // Leitura direta do documento da sala: evita depender só do snapshot em celulares/cache.
       forceSyncStartedRoom('poll-direct');
     }, 700);
@@ -398,7 +405,10 @@
   async function startOnline(){
     if(!currentRoomCode||!currentUser||!currentRoom)return;
     if(!isHost()){setStatus('Apenas o anfitrião pode iniciar a partida.','error');return;}
-    const humans=currentPlayers.filter(p=>!p.isBot); const botCount=Number(currentRoom.botCount||0);
+    const roomSnap = await roomRef(currentRoomCode).get();
+    if(roomSnap.exists) currentRoom = {...currentRoom, ...roomSnap.data()};
+    const playersNow = await fetchRoomPlayersDirect();
+    const humans=playersNow.filter(p=>!p.isBot); const botCount=Number(currentRoom.botCount||0);
     const pending=humans.filter(p=>p.uid!==currentRoom.hostUid&&!p.ready);
     if(humans.length+botCount<3){setStatus('A partida precisa de pelo menos 3 participantes somando jogadores humanos e bots.','error');return;}
     if(pending.length){setStatus(`Ainda falta pronto de: ${pending.map(p=>p.name||'Jogador').join(', ')}.`, 'error');return;}
@@ -433,7 +443,8 @@
   function nextUid(game,fromUid,includePassed=false){ const order=game.turnOrder||[]; const start=Math.max(0,order.indexOf(fromUid)); const fin=new Set(game.finishedOrder||[]); for(let o=1;o<=order.length;o++){const uid=order[(start+o)%order.length]; if(fin.has(uid))continue; if(!includePassed&&game.passes?.[uid])continue; return uid;} return order.find(uid=>!fin.has(uid))||''; }
 
   function renderOnlineGame(){
-    if(!onlineMode||!currentRoom||!currentRoom.game)return; collectDom();
+    if(!onlineMode)return; collectDom();
+    if(!currentRoom || !currentRoom.game){ renderOnlineWaitingTable(); return; }
     const game=currentRoom.game; const isMyTurn=game.phase==='playing'&&game.turnUid===currentUser?.uid;
     const turnPlayer=currentPlayers.find(p=>p.uid===game.turnUid);
     const selected=currentHand.filter(c=>selectedCardIds.has(c.id)); const reason=invalid(selected,game.tableCombo);
@@ -444,6 +455,30 @@
     if(game.phase==='finished')renderFinish(game);
     if(isHost()) scheduleBotIfNeeded('render-online-game');
   }
+  function renderOnlineWaitingTable(){
+    collectDom();
+    if(dom.roomInfo) dom.roomInfo.textContent = currentRoomCode ? `Sala online ${currentRoomCode}` : 'Sala online';
+    if(dom.turnInfo) dom.turnInfo.textContent = isHost() ? 'Sala criada. Inicie quando todos estiverem prontos.' : 'Aguardando o anfitrião iniciar';
+    if(dom.ruleHint) dom.ruleHint.textContent = 'Você já está na mesa. A partida aparecerá automaticamente aqui.';
+    if(dom.playersSummary){
+      const total=currentPlayers.length;
+      dom.playersSummary.innerHTML = currentPlayers.length ? currentPlayers.map(p=>{
+        const isMe=p.uid===currentUser?.uid;
+        const role=p.uid===currentRoom?.hostUid?'Host':p.isBot?'IA':'Convidado';
+        return `<article class="playerBadge ${isMe?'localPlayerBadge':'opponentBadge'} ${total>10?'ultraCompact':total>6?'compact':''}"><strong>${esc(p.name||'Jogador')}</strong><span class="cardsCount">${p.ready?'✓':'…'}</span><em>${role}</em></article>`;
+      }).join('') : '<article class="playerBadge localPlayerBadge"><strong>Conectando...</strong><span class="cardsCount">…</span><em>Sala</em></article>';
+    }
+    if(dom.tableCards){
+      dom.tableCards.innerHTML = '<div class="onlineTableNotice"><strong>Aguardando início</strong><span>Quando o anfitrião clicar em Iniciar partida, esta tela vira a mesa automaticamente.</span><small>Não feche esta aba.</small></div>';
+    }
+    if(dom.roundHistory) dom.roundHistory.innerHTML = '<span>Jogadores conectados aparecerão acima.</span>';
+    if(dom.playerHand) dom.playerHand.innerHTML = '<p class="observerNotice">Suas cartas serão distribuídas quando a partida começar.</p>';
+    if(dom.playButton) dom.playButton.disabled = true;
+    if(dom.passButton) dom.passButton.disabled = true;
+    if(dom.rematchButton) dom.rematchButton.hidden = true;
+    if(dom.selectionMessage) dom.selectionMessage.textContent = isHost() ? 'Use o lobby para iniciar a partida.' : 'Você está pronto. Aguarde o anfitrião.';
+  }
+
   function playOnlineSfx(game){
     if(!game) return;
     if(game.phase !== lastSfxPhase){
@@ -807,6 +842,15 @@
     detachRoom(); currentRoomCode=''; currentRoom=null; currentPlayers=[]; currentHand=[]; onlineMode=false; selectedCardIds.clear(); collectDom(); if(dom.menuScreen){dom.menuScreen.style.display=''; dom.menuScreen.removeAttribute('aria-hidden'); dom.menuScreen.classList.add('active');} if(dom.gameScreen){dom.gameScreen.style.display=''; dom.gameScreen.classList.remove('active');} document.body.classList.remove('onlineGameActive'); document.documentElement.classList.remove('onlineGameActive'); renderLobby(); if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true; setStatus('Você saiu da sala.','ok');
   }
   async function copyRoomCode(){ if(!currentRoomCode)return; try{await navigator.clipboard.writeText(currentRoomCode); setStatus(`Código ${currentRoomCode} copiado.`,'ok');}catch(e){setStatus(`Código da sala: ${currentRoomCode}`,'ok');}}
+  async function fetchRoomPlayersDirect(){
+    if(!currentRoomCode) return [];
+    const snap = await roomRef(currentRoomCode).collection('players').get();
+    const players = snap.docs.map(d => ({id:d.id, ...d.data()}));
+    players.sort((a,b) => timestampToMs(a.joinedAt) - timestampToMs(b.joinedAt));
+    currentPlayers = players;
+    return players;
+  }
+
 
   document.addEventListener('click',e=>{
     const gameAction=e.target.closest('[data-action]')?.dataset.action;
