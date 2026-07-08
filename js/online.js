@@ -144,7 +144,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.6.5: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.6.6: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -206,16 +206,23 @@
     const room=snap.data(); const password=String(dom.menuPassword?.value||dom.password?.value||'').trim();
     if(room.passwordProtected && simpleHash(password)!==room.passwordHash){ setStatus('Senha incorreta para esta sala.', 'error'); return; }
     if(room.phase!=='lobby'){ setStatus('Esta sala já iniciou. Entrada em andamento virá depois.', 'error'); return; }
-    await playerRef(code,currentUser.uid).set({uid:currentUser.uid,name:getPlayerName(),isHost:currentUser.uid===room.hostUid,isBot:false,ready:false,role:currentUser.uid===room.hostUid?'host':'player',connected:true,cardCount:0,joinedAt:ts(),lastSeen:ts()},{merge:true});
+    await playerRef(code,currentUser.uid).set({uid:currentUser.uid,name:getPlayerName(),isHost:currentUser.uid===room.hostUid,isBot:false,ready:true,role:currentUser.uid===room.hostUid?'host':'player',connected:true,cardCount:0,joinedAt:ts(),lastSeen:ts()},{merge:true});
     await roomRef(code).set({updatedAt:ts()},{merge:true});
-    attachRoom(code); sfx('ui'); requestAutoVoice('room-joined'); setStatus(`Você entrou na sala ${code}. A voz será ativada; depois toque em Estou pronto.`, 'ok'); window.setTimeout(()=>dom.homeLobbyPanel?.scrollIntoView?.({block:'center'}),120);
+    attachRoom(code); sfx('ui'); requestAutoVoice('room-joined'); setStatus(`Você entrou na sala ${code}. Você já está pronto; aguarde o anfitrião iniciar.`, 'ok'); window.setTimeout(()=>dom.homeLobbyPanel?.scrollIntoView?.({block:'center'}),120);
   }
 
   function attachRoom(code){
     detachRoom(); currentRoomCode=code;
     if(dom.homeLobbyPanel) dom.homeLobbyPanel.hidden=false; if(dom.lobby) dom.lobby.hidden=false; if(dom.bridgeNote) dom.bridgeNote.hidden=true; if(dom.lobbyTitle) dom.lobbyTitle.textContent=`Sala ${code}`;
     roomUnsub=roomRef(code).onSnapshot(s=>{ currentRoom=s.exists?s.data():null; if(!currentRoom){setStatus('A sala foi encerrada.','error');detachRoom();renderLobby();return;} if(currentRoom.phase==='playing'||currentRoom.phase==='finished') enterOnlineTable(); renderLobby(); renderOnlineGame(); if(isHost()) setupHostActionListener(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler a sala: ${e.message}`,'error'));
-    playersUnsub=roomRef(code).collection('players').orderBy('joinedAt','asc').onSnapshot(s=>{ currentPlayers=s.docs.map(d=>({id:d.id,...d.data()})); renderLobby(); renderOnlineGame(); if(isHost()) scheduleBotIfNeeded(); }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
+    playersUnsub=roomRef(code).collection('players').orderBy('joinedAt','asc').onSnapshot(s=>{
+      currentPlayers=s.docs.map(d=>({id:d.id,...d.data()}));
+      const me=currentPlayers.find(p=>p.uid===currentUser?.uid);
+      if(me && !me.isHost && !me.isBot && currentRoom?.phase==='lobby' && me.ready!==true){
+        playerRef(code,currentUser.uid).set({ready:true,lastSeen:ts()},{merge:true}).catch(console.warn);
+      }
+      renderLobby(); renderOnlineGame(); if(isHost()) scheduleBotIfNeeded();
+    }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
     handUnsub=handRef(code,currentUser.uid).onSnapshot(s=>{ currentHand=s.exists?sortCards(s.data().cards||[]):[]; renderOnlineGame(); }, ()=>{});
     heartbeatTimer=window.setInterval(()=>{ if(currentRoomCode&&currentUser) playerRef(currentRoomCode,currentUser.uid).set({connected:true,lastSeen:ts()},{merge:true}).catch(console.warn); },15000);
   }
@@ -240,8 +247,8 @@
     const canStart=isHost()&&total>=3&&currentRoom.phase==='lobby'&&allGuestsReady;
     const me=currentPlayers.find(p=>p.uid===currentUser?.uid);
     if(dom.readyButton){
-      dom.readyButton.textContent=me?.ready?'Pronto ✓':'Estou pronto';
-      dom.readyButton.disabled=currentRoom.phase!=='lobby';
+      dom.readyButton.textContent=me?.ready?'Pronto automático ✓':'Estou pronto';
+      dom.readyButton.disabled=currentRoom.phase!=='lobby' || Boolean(me?.ready);
       dom.readyButton.classList.toggle('readyOn', Boolean(me?.ready));
       dom.readyButton.hidden = isHost();
     }
@@ -255,7 +262,7 @@
     const meta=`<div class="onlineRoomMeta"><span class="onlinePill">Baralhos: ${Number(currentRoom.deckCount||1)}</span><span class="onlinePill">Bots: ${Number(currentRoom.botCount||0)}</span><span class="onlinePill">${currentRoom.includeJokers?'Com coringas':'Sem coringas'}</span><span class="onlinePill">${currentRoom.passwordProtected?'Com senha':'Sem senha'}</span><span class="onlinePill">${currentRoom.phase==='playing'?'Em partida':currentRoom.phase==='finished'?'Encerrada':'Lobby'}</span></div>`;
     const readyGuide = isHost()
       ? `<div class="readyGuide ${pendingGuests.length?'waiting':'allReady'}"><strong>${pendingGuests.length?'Faltam ficar prontos:':'Convidados prontos'}</strong><span>${pendingGuests.length?pendingGuests.map(p=>esc(p.name||'Jogador')).join(', '):(guests.length?'Você já pode iniciar.':'Aguardando convidados ou usando bots.')}</span></div>`
-      : `<div class="readyGuide ${me?.ready?'allReady':'waiting'}"><strong>${me?.ready?'Você está pronto':'Sua vez'}</strong><span>${me?.ready?'Aguarde o anfitrião iniciar.':'Toque no botão verde Estou pronto para liberar o início.'}</span></div>`;
+      : `<div class="readyGuide ${me?.ready?'allReady':'waiting'}"><strong>${me?.ready?'Você já está pronto':'Entrada concluída'}</strong><span>${me?.ready?'Aguarde o anfitrião iniciar.':'O jogo tentará marcar você como pronto automaticamente.'}</span></div>`;
     dom.playersList.innerHTML=meta+readyGuide+currentPlayers.map(p=>{
       const isMe=p.uid===currentUser?.uid;
       const role=p.uid===currentRoom.hostUid?'Host':p.isBot?'Bot':'Convidado';
@@ -266,9 +273,14 @@
     const hostStatus = pendingGuests.length
       ? `Aguardando pronto de: ${pendingGuests.map(p=>p.name||'Jogador').join(', ')}.`
       : `Todos os convidados estão prontos. Você pode iniciar.`;
-    setStatus(currentRoom.phase==='playing'?`Partida online em andamento. Entrando na mesa...`:(isHost()?hostStatus:(me?.ready?`Você está pronto. Aguarde o anfitrião iniciar.`:`Você entrou na sala. Toque no botão verde Estou pronto.`)),'ok');
+    setStatus(currentRoom.phase==='playing'?`Partida online em andamento. Entrando na mesa...`:(isHost()?hostStatus:(me?.ready?`Você está pronto. Aguarde o anfitrião iniciar.`:`Você entrou na sala e já está pronto. Aguarde o anfitrião iniciar.`)),'ok');
   }
-  async function toggleReady(){ if(!currentRoomCode||!currentUser||currentRoom?.phase!=='lobby')return; const me=currentPlayers.find(p=>p.uid===currentUser.uid); await playerRef(currentRoomCode,currentUser.uid).set({ready:!me?.ready,lastSeen:ts()},{merge:true}); }
+  async function toggleReady(){
+    if(!currentRoomCode||!currentUser||currentRoom?.phase!=='lobby')return;
+    if(isHost()) return;
+    await playerRef(currentRoomCode,currentUser.uid).set({ready:true,lastSeen:ts()},{merge:true});
+    setStatus('Você está pronto. Aguarde o anfitrião iniciar.','ok');
+  }
 
   async function startOnline(){
     if(!currentRoomCode||!currentUser||!currentRoom)return;

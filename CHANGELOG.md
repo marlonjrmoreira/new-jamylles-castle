@@ -221,3 +221,11 @@
 - A solicitação de permissão acontece associada ao gesto do usuário, reduzindo bloqueios em navegadores móveis.
 - Se a permissão for bloqueada, o botão `Entrar na voz` continua disponível.
 - Textos do lobby orientam o jogador a autorizar o microfone antes de dar pronto.
+
+
+## v0.6.6
+- Convidados agora ficam prontos automaticamente ao entrar na sala.
+- O botão do convidado vira confirmação visual: `Pronto automático ✓`.
+- O botão não alterna mais para “não pronto”, evitando travar o início da partida.
+- Se um documento antigo entrar como `ready:false`, o jogo corrige automaticamente para `ready:true` no lobby.
+- O anfitrião continua vendo claramente se há alguém pendente, mas o fluxo normal não depende mais do convidado encontrar o botão.

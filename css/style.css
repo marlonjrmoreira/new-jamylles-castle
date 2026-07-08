@@ -662,3 +662,16 @@ button:disabled{cursor:not-allowed; opacity:.55}
 .voiceHint{
     color:rgba(255,247,223,.76);
 }
+
+
+/* === v0.6.6 — convidado pronto automaticamente === */
+#menuScreen .homeLobbyPanel .readyAction:disabled.readyOn,
+#menuScreen .homeLobbyPanel .readyAction.readyOn{
+    opacity:1;
+    filter:none;
+    background:linear-gradient(180deg, rgba(46,204,113,.96), rgba(17,111,68,.98));
+    border-color:rgba(190,255,218,.70);
+    color:#effff5;
+    box-shadow:0 0 18px rgba(46,204,113,.18);
+}
+.readyGuide.allReady strong::before{content:'✓ ';}
