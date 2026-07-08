@@ -954,6 +954,18 @@ class CastleAudio{
 }
 
 const castleAudio = new CastleAudio();
+window.castleAudio = castleAudio;
+window.jcSfx = {
+    ui: () => castleAudio.ui(),
+    draw: () => castleAudio.draw(),
+    card: (count = 1) => castleAudio.card(count),
+    pass: () => castleAudio.pass(),
+    breaker: () => castleAudio.breaker(),
+    tableClear: (type = 'normal') => castleAudio.tableClear(type),
+    finish: () => castleAudio.finish(),
+    stopAll: () => castleAudio.stopAll(),
+    configure: enabled => castleAudio.configure(enabled),
+};
 
 /* ===== js/app.js ===== */
 
@@ -1046,7 +1058,7 @@ function startLocalGame(){
     castleAudio.configure(document.querySelector('#soundEnabled')?.checked !== false);
     stopMenuTheme();
     castleAudio.ui();
-    castleAudio.startAmbience();
+    // v0.5.6: sem música/ambiência durante a mesa; apenas efeitos sonoros curtos.
     const settings = getMenuSettings();
     const options = getLocalOptions();
     screens.menu.classList.add('fadeOut');
@@ -1438,7 +1450,8 @@ function updateTensionFeedback(){
     const minCards = counts.length ? Math.min(...counts) : Infinity;
     screens.game.classList.toggle('tension-high', minCards <= 3 && minCards > 1);
     screens.game.classList.toggle('tension-critical', minCards <= 1);
-    castleAudio.updateTension(minCards);
+    // v0.5.6: tensão visual apenas; sem bipes/ambiência de fundo durante conversas.
+    castleAudio.updateTension(Infinity);
 }
 
 function showEndModal(){
@@ -1559,7 +1572,7 @@ function showPlannedOnlineInfo(){
 }
 
 function showRules(){
-    alert('Regras v0.5.3:\n\n1. O início da primeira partida acontece por sorteio.\n2. Mesa livre: jogue uma ou mais cartas do mesmo valor.\n3. Mesa ocupada: jogue a mesma quantidade de cartas com valor maior.\n4. Ao jogar 2, ou coringa se estiver ativado, a mesa limpa automaticamente e quem jogou inicia nova rodada.\n5. Coringas são opcionais e começam desativados por padrão.\n6. Na revanche, Majestade/Aldeão e Regente/Plebeu trocam cartas automaticamente.\n7. A última jogada antes de limpar a mesa fica visível por pelo menos 0,5s para leitura estratégica.\n8. A v0.5.3 adiciona distribuição animada, jogadas cinematográficas e cerimônia da corte.');
+    alert('Regras v0.5.6:\n\n1. O início da primeira partida acontece por sorteio.\n2. Mesa livre: jogue uma ou mais cartas do mesmo valor.\n3. Mesa ocupada: jogue a mesma quantidade de cartas com valor maior.\n4. Ao jogar 2, ou coringa se estiver ativado, a mesa limpa automaticamente e quem jogou inicia nova rodada.\n5. Coringas são opcionais e começam desativados por padrão.\n6. Na revanche, Majestade/Aldeão e Regente/Plebeu trocam cartas automaticamente.\n7. A última jogada antes de limpar a mesa fica visível por pelo menos 0,5s para leitura estratégica.\n8. A v0.5.6 mantém a música apenas no menu e usa só efeitos curtos durante a jogatina.');
 }
 
 function backToMenu(){

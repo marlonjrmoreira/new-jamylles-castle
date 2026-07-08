@@ -873,3 +873,17 @@ body{
         min-height:38px;
     }
 }
+
+
+/* === v0.5.5 — lobby sem duplicação === */
+.onlineBridgeNote{
+    width:100%;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px dashed rgba(255,231,168,.28);
+    background:rgba(255,255,255,.03);
+    color:rgba(255,247,223,.78);
+    font-size:11px;
+    line-height:1.45;
+    text-align:center;
+}

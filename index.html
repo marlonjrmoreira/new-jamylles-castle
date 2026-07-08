@@ -84,7 +84,7 @@
                         <select id="observerVoicePolicy">
                             <option value="listen-only" selected>Ouvem, mas não falam</option>
                             <option value="muted">Sem voz</option>
-                            <option value="host-can-allow">Host pode liberar</option>
+                            <option value="host-can-allow">Podem falar se o anfitrião permitir</option>
                         </select>
                     </label>
                 </div>
@@ -94,7 +94,7 @@
                     <button class="menuButton secondary compact" data-action="observer-preview" type="button">Observar</button>
                     <button class="menuButton secondary compact" data-action="rules" type="button">Regras</button>
                 </div>
-                <span class="versionTag">v0.5.4 — menu refinado</span>
+                <span class="versionTag">v0.6.1 — reciclagem de salas</span>
             </section>
         </div>
     </main>
@@ -174,29 +174,11 @@
     <div id="onlineModal" class="modal onlineModal" hidden>
         <div class="modalCard onlineCard">
             <span class="drawLabel">Multiplayer</span>
-            <h2>Sala Online</h2>
-            <p class="tradePrivacy">Use o nome da sala do menu para criar ou buscar uma sala. Bots, baralhos e senha são configurações do anfitrião.</p>
+            <h2>Lobby da Sala</h2>
+            <p class="tradePrivacy">Os dados da sala agora ficam apenas na tela inicial. Este painel serve só para acompanhar o lobby, copiar o código e iniciar a partida.</p>
 
             <div class="onlineStatus" id="onlineStatus">Conectando ao Firebase...</div>
-
-            <div class="onlineGrid">
-                <label>
-                    Nome do jogador
-                    <input id="onlinePlayerName" type="text" maxlength="16" placeholder="Seu nome">
-                </label>
-                <label>
-                    Código da sala
-                    <input id="onlineRoomCode" type="text" maxlength="18" placeholder="Ex.: CASTELO26">
-                </label>
-                <label>
-                    Senha
-                    <input id="onlineRoomPassword" type="password" maxlength="24" placeholder="opcional">
-                </label>
-            </div>
-
-            <div class="modalActions onlineActions">
-                <button class="menuButton" data-online-action="create-room" type="button">Criar sala</button>
-                <button class="menuButton secondary" data-online-action="join-room" type="button">Entrar na sala</button>
+            <div class="onlineBridgeNote">Configure nome, sala, senha e demais opções na tela inicial.
             </div>
 
             <section id="onlineLobby" class="onlineLobby" hidden>
@@ -205,14 +187,27 @@
                     <button class="miniButton" data-online-action="copy-room" type="button">Copiar código</button>
                 </div>
                 <div id="onlinePlayersList" class="onlinePlayersList"></div>
+
+                <section id="voicePanel" class="voicePanel" hidden>
+                    <div class="voiceHeader">
+                        <strong>Voz da sala</strong>
+                        <span class="voiceStatus">Fora da voz</span>
+                    </div>
+                    <div class="voiceActions">
+                        <button class="miniButton voiceJoinButton" data-voice-action="join" type="button">Entrar na voz</button>
+                        <button class="miniButton voiceMuteButton" data-voice-action="mute" type="button" disabled>Mutar</button>
+                        <button class="miniButton voiceLeaveButton" data-voice-action="leave" type="button" disabled>Sair</button>
+                    </div>
+                    <div class="voiceParticipantList" aria-label="Participantes na voz"></div>
+                    <p class="onlineHint voiceHint">Jogadores podem falar. Observadores falam apenas se o anfitrião permitir.</p>
+                </section>
                 <div class="modalActions onlineActions">
                     <button class="menuButton secondary" data-online-action="toggle-ready" type="button" id="readyButton">Estou pronto</button>
                     <button class="menuButton" data-online-action="start-online" type="button" id="startOnlineButton" disabled>Iniciar partida</button>
                     <button class="menuButton secondary" data-online-action="leave-room" type="button">Sair da sala</button>
                 </div>
                 <p class="onlineHint">
-                    v0.5.2 adiciona início forçado pelo anfitrião, nome claro do jogador e entrada visual na mesa online.
-                    A partida online já distribui cartas, sincroniza mesa, turnos, mãos privadas e bots do anfitrião.
+                    v0.5.5 mantém o lobby mais limpo, reaproveita salas antigas automaticamente e preserva a entrada direta pela tela inicial.
                 </p>
             </section>
 
@@ -223,11 +218,27 @@
     </div>
 
 
+
+    <div id="voiceDock" class="voiceDock" hidden>
+        <div class="voiceHeader">
+            <strong>Voz</strong>
+            <span class="voiceStatus">Fora da voz</span>
+        </div>
+        <div class="voiceActions">
+            <button class="miniButton voiceJoinButton" data-voice-action="join" type="button">Entrar</button>
+            <button class="miniButton voiceMuteButton" data-voice-action="mute" type="button" disabled>Mutar</button>
+            <button class="miniButton voiceLeaveButton" data-voice-action="leave" type="button" disabled>Sair</button>
+        </div>
+        <div class="voiceParticipantList" aria-label="Participantes na voz"></div>
+    </div>
+    <div id="remoteAudioMount" hidden></div>
+
     <audio id="menuThemeAudio" src="assets/audio/menu-theme.mp3" preload="auto" loop></audio>
     <script src="js/app.bundle.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js" defer></script>
     <script src="js/online.js" defer></script>
+    <script src="js/voice.js" defer></script>
 </body>
 </html>

@@ -373,3 +373,102 @@ button:disabled{cursor:not-allowed; opacity:.55}
     font-size:20px;
 }
 .onlineTableNotice small{ color:rgba(255,247,223,.64); }
+
+
+/* === v0.6.0 — Chat de voz WebRTC === */
+.voicePanel{
+    margin-top:12px;
+    padding:12px;
+    border:1px solid rgba(255,231,168,.24);
+    border-radius:16px;
+    background:rgba(4,1,12,.48);
+    display:grid;
+    gap:10px;
+}
+.voiceHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    color:#fff7df;
+}
+.voiceHeader strong{
+    color:var(--gold-strong);
+}
+.voiceStatus{
+    font-size:11px;
+    color:rgba(255,247,223,.68);
+    text-align:right;
+}
+.voiceActions{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:8px;
+}
+.voiceActions .miniButton{
+    width:100%;
+    min-height:34px;
+}
+.voiceParticipantList{
+    display:grid;
+    gap:6px;
+}
+.voicePerson{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:7px 9px;
+    border:1px solid rgba(255,231,168,.16);
+    border-radius:11px;
+    background:rgba(255,255,255,.035);
+    color:rgba(255,247,223,.84);
+    font-size:12px;
+}
+.voicePerson em{
+    font-style:normal;
+    color:rgba(255,247,223,.58);
+    font-size:11px;
+}
+.voicePerson.speaking{
+    border-color:rgba(255,211,110,.55);
+    box-shadow:0 0 18px rgba(255,211,110,.16);
+}
+.voiceHint{
+    margin:0;
+    font-size:11px;
+}
+.voiceDock{
+    position:fixed;
+    left:50%;
+    bottom:calc(10px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);
+    z-index:80;
+    width:min(94vw,430px);
+    padding:10px;
+    border:1px solid rgba(255,231,168,.26);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(11,3,26,.88), rgba(5,1,14,.92));
+    box-shadow:0 18px 42px rgba(0,0,0,.42), inset 0 0 18px rgba(255,231,168,.05);
+    backdrop-filter:blur(10px);
+    display:grid;
+    gap:8px;
+}
+.voiceDock[hidden]{display:none;}
+.voiceDock .voiceParticipantList{
+    max-height:72px;
+    overflow:auto;
+}
+@media (max-width:430px){
+    .voiceDock{
+        width:calc(100vw - 16px);
+        bottom:8px;
+    }
+    .voiceActions{
+        gap:6px;
+    }
+    .voiceActions .miniButton{
+        font-size:10px;
+        padding:0 6px;
+    }
+}

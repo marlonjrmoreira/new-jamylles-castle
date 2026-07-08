@@ -89,3 +89,41 @@
     70%{transform:translateY(-52px) scale(.92) rotate(3deg); filter:brightness(1.28); opacity:.96;}
     100%{transform:translateY(-86px) scale(.74) rotate(7deg); filter:brightness(1.4); opacity:0;}
 }
+
+
+/* === v0.5.5 — carta 2 especial === */
+.card.royalTwo{
+    border-color:rgba(232,92,169,.92);
+    background:linear-gradient(180deg,#fff8fd 0%, #ffd6ea 58%, #ffc0df 100%);
+    box-shadow:0 10px 22px rgba(0,0,0,.34), 0 0 18px rgba(231,98,171,.22), inset 0 1px 0 rgba(255,255,255,.98), inset 0 0 0 4px rgba(255,124,193,.14);
+}
+.card.royalTwo::before{
+    content:"";
+    position:absolute;
+    inset:6px;
+    border-radius:10px;
+    border:1px solid rgba(247,160,210,.55);
+    pointer-events:none;
+    z-index:1;
+}
+.card.royalTwo::after{
+    background:linear-gradient(135deg,rgba(255,255,255,.75),transparent 38%), radial-gradient(circle at 50% 46%, rgba(255,162,216,.25) 0, rgba(255,162,216,0) 48%), radial-gradient(circle at center, transparent 54%, rgba(203,72,143,.12) 55%, transparent 58%);
+}
+.card.royalTwo .cardSymbol{
+    font-size:38px;
+    color:#dd4b98;
+    filter:drop-shadow(0 2px 1px rgba(255,255,255,.62)) drop-shadow(0 4px 4px rgba(125,22,74,.22));
+}
+.card.royalTwo .cardCorner{
+    color:#c64387;
+}
+.card.royalTwo.selected{
+    outline-color:#ff78c6;
+    box-shadow:0 20px 40px rgba(0,0,0,.52), 0 0 26px rgba(255,120,198,.42);
+}
+.card.royalTwo.playableHint{
+    box-shadow:0 10px 20px rgba(0,0,0,.34), 0 0 22px rgba(255,120,198,.36), inset 0 0 0 4px rgba(255,120,198,.14);
+}
+@media (max-width:760px){
+    .card.royalTwo .cardSymbol{font-size:30px;}
+}

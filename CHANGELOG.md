@@ -150,3 +150,39 @@
 - Rótulo “Prévia Observador Seguro” simplificado para “Observar”.
 - Botões menores, mais alinhados e com melhor contraste.
 - Mantida a lógica existente do multiplayer e do menu online.
+
+
+## v0.5.5
+- A tela inicial passa a concentrar nome, sala, senha e configurações, sem repetição no lobby.
+- O painel de lobby foi simplificado para apenas acompanhar jogadores, copiar código e iniciar a partida.
+- Salas antigas encerradas podem ser reutilizadas automaticamente.
+- Ao sair do lobby ou ao encerrar uma partida como anfitrião, a sala é apagada do Firebase.
+- A carta 2 ganhou visual especial com saltinho rosa de princesa.
+- Texto da voz dos observadores refinado: podem falar se o anfitrião permitir.
+
+
+## v0.5.6
+- A música/trilha fica restrita ao menu e à tela inicial.
+- Ao entrar na mesa de jogo, a trilha é pausada automaticamente.
+- Durante a jogatina ficam apenas efeitos sonoros curtos: cartas, passar, limpar mesa, sorteio/embaralhar e fim.
+- Removidos bipes/ambiência de tensão contínua durante a partida para não atrapalhar conversa por voz.
+- O modo online também para a música ao entrar na mesa e reaproveita os efeitos curtos do jogo.
+
+
+## v0.6.0
+- Adicionado chat de voz WebRTC.
+- Firebase agora também faz a sinalização da chamada por `voiceSignals`.
+- Participantes de voz aparecem em `voiceParticipants`.
+- Botões: Entrar na voz, Mutar/Desmutar e Sair.
+- A voz aparece no lobby e em um dock durante a mesa.
+- Jogadores podem falar.
+- Observadores podem falar apenas quando a sala estiver configurada como `Podem falar se o anfitrião permitir`.
+- Música continua fora da mesa; durante a partida permanecem apenas efeitos sonoros curtos.
+- Novas regras Firestore em `docs/FIREBASE_SETUP.md`.
+
+
+## v0.6.1
+- Corrigido problema de nomes de salas antigos ficarem presos no Firestore.
+- Salas finalizadas ou abandonadas por mais de 30 minutos podem ser recicladas.
+- Ao reciclar, o jogo tenta limpar `players`, `hands`, `actions`, `voiceParticipants` e `voiceSignals`.
+- Novas Rules do Firestore em `docs/FIREBASE_SETUP.md`.
