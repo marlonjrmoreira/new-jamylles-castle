@@ -48,6 +48,7 @@
   }
 
   function setStatus(message, type=''){
+    try{ console.log('[JC STATUS]', type || 'info', message); }catch(error){}
     if(!dom.status) return;
     dom.status.textContent = message;
     dom.status.classList.toggle('error', type === 'error');
@@ -157,7 +158,7 @@
       app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
       auth = firebase.auth(); db = firebase.firestore();
 
-      // v0.7.11: SESSION evita que duas abas normais do mesmo navegador compartilhem o mesmo jogador.
+      // v0.7.12: SESSION evita que duas abas normais do mesmo navegador compartilhem o mesmo jogador.
       // LOCAL fazia convidado e anfitrião terem o mesmo UID, travando a entrada do convidado.
       await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
@@ -203,7 +204,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.11: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.12: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -290,76 +291,100 @@
 
   async function joinRoom(){
     if(dom.modal) dom.modal.hidden=false;
-    if(!await ensureReady()) return;
 
-    const code=normalizeRoomCode(dom.menuRoomName?.value||dom.roomCode?.value||'');
-    if(dom.roomCode) dom.roomCode.value=code;
+    try{
+      if(!await ensureReady()) return;
 
-    const snap=await getDocFresh(roomRef(code), 'room-by-code');
-    if(!snap.exists){
-      setStatus(`Não encontrei a sala ${code}. Confira o código ou peça ao anfitrião para criar.`, 'error');
-      return;
-    }
+      const code=normalizeRoomCode(dom.menuRoomName?.value||dom.roomCode?.value||'');
+      if(dom.roomCode) dom.roomCode.value=code;
 
-    const room=snap.data() || {};
-    const password=String(dom.menuPassword?.value||dom.password?.value||'').trim();
-
-    if(room.passwordProtected && simpleHash(password)!==room.passwordHash){
-      setStatus('Senha incorreta para esta sala.', 'error');
-      return;
-    }
-
-    // v0.7.11: se a aba do convidado pegou o mesmo UID do anfitrião,
-    // cria uma nova sessão anônima automaticamente e segue a entrada.
-    if(isSameHostSession(room)){
-      setStatus('Esta aba estava usando a mesma sessão do anfitrião. Criando sessão própria de convidado...', 'ok');
-      const changed = await newAnonymousSession('guest-same-host-uid');
-      if(!changed){
-        setStatus('Não consegui separar a sessão do convidado. Tente aba anônima, outro navegador ou outro aparelho.', 'error');
+      const snap=await getDocFresh(roomRef(code), 'room-by-code');
+      if(!snap.exists){
+        setStatus(`Não encontrei a sala ${code}. Confira o código ou peça ao anfitrião para criar.`, 'error');
         return;
       }
-      if(currentUser.uid === room.hostUid){
-        setStatus('O Firebase ainda devolveu o mesmo UID do anfitrião. Use aba anônima, outro navegador ou outro aparelho.', 'error');
+
+      const room=snap.data() || {};
+      const password=String(dom.menuPassword?.value||dom.password?.value||'').trim();
+
+      if(room.passwordProtected && simpleHash(password)!==room.passwordHash){
+        setStatus('Senha incorreta para esta sala.', 'error');
         return;
       }
+
+      if(isSameHostSession(room)){
+        setStatus('Esta aba estava usando a mesma sessão do anfitrião. Criando sessão própria de convidado...', 'ok');
+        const changed = await newAnonymousSession('guest-same-host-uid');
+        if(!changed || currentUser.uid === room.hostUid){
+          setStatus('Não consegui separar a sessão do convidado. Use aba anônima, outro navegador ou outro aparelho.', 'error');
+          return;
+        }
+      }
+
+      if(room.phase!=='lobby'){
+        const reconnected = await reconnectStartedParticipant(code, room, 'join-started-room');
+        if(reconnected) return;
+        setStatus('Esta sala já iniciou. Se você já estava nela, tente tocar em Entrar na mesa ou peça ao anfitrião para criar nova sala.', 'error');
+        return;
+      }
+
+      const playerData={
+        uid:currentUser.uid,
+        name:getPlayerName(),
+        isHost:false,
+        isBot:false,
+        ready:true,
+        role:'player',
+        connected:true,
+        cardCount:0,
+        joinedAt:ts(),
+        lastSeen:ts(),
+        clientState:'waiting-table'
+      };
+
+      // Etapa crítica: o convidado só precisa gravar o próprio player.
+      // Não dependemos mais de escrita no documento principal rooms/{code},
+      // porque as Rules podem permitir player e negar atualização da sala.
+      await playerRef(code,currentUser.uid).set(playerData,{merge:true});
+
+      currentRoomCode=code;
+      currentRoom = {...room};
+      currentPlayers = [playerData];
+      rememberRoom(code, 'guest');
+
+      attachRoom(code);
+      sfx('ui');
+
+      setStatus(`Você entrou na sala ${code}. Abrindo mesa de espera...`, 'ok');
+      enterOnlineTable(true);
+
+      // Escrita auxiliar não crítica. Se as Rules negarem, o fluxo do convidado continua.
+      roomRef(code).set({
+        updatedAt:ts(),
+        lastGuestUid:currentUser.uid,
+        lastGuestName:playerData.name
+      },{merge:true}).catch(error=>{
+        console.warn('Atualização auxiliar da sala ignorada para convidado:', error);
+      });
+
+      try{ requestAutoVoice('room-joined'); }catch(error){ console.warn('Voz automática ignorada:', error); }
+
+      window.setTimeout(()=>forceSyncStartedRoom('join-room-after-enter'), 250);
+      window.setTimeout(()=>forceGuestIntoStartedGame('join-room-after-enter-hard'), 800);
+    }catch(error){
+      console.error('Erro ao entrar na sala:', error);
+      setStatus(`Erro ao entrar na sala: ${error.message || error}`, 'error');
+
+      // Se o player já foi criado antes do erro, ainda tentamos abrir a mesa de espera.
+      if(currentRoomCode && currentRoom){
+        try{
+          attachRoom(currentRoomCode);
+          enterOnlineTable(true);
+        }catch(fallbackError){
+          console.warn('Falha no fallback de entrada:', fallbackError);
+        }
+      }
     }
-
-    if(room.phase!=='lobby'){
-      const reconnected = await reconnectStartedParticipant(code, room, 'join-started-room');
-      if(reconnected) return;
-      setStatus('Esta sala já iniciou. Se você já estava nela, confira se está no mesmo aparelho/aba em que entrou antes. Caso contrário, peça ao anfitrião para criar uma nova sala.', 'error');
-      return;
-    }
-
-    const playerData={
-      uid:currentUser.uid,
-      name:getPlayerName(),
-      isHost:false,
-      isBot:false,
-      ready:true,
-      role:'player',
-      connected:true,
-      cardCount:0,
-      joinedAt:ts(),
-      lastSeen:ts(),
-      clientState:'waiting-table'
-    };
-
-    await playerRef(code,currentUser.uid).set(playerData,{merge:true});
-    await roomRef(code).set({updatedAt:ts(), lastGuestUid:currentUser.uid, lastGuestName:playerData.name},{merge:true});
-
-    currentRoomCode=code;
-    currentRoom = {...room, updatedAt:ts()};
-    currentPlayers = await fetchRoomPlayersDirect(code).catch(() => [playerData]);
-    rememberRoom(code, 'guest');
-
-    attachRoom(code);
-    sfx('ui');
-    requestAutoVoice('room-joined');
-
-    setStatus(`Você entrou na sala ${code}. Abrindo mesa de espera...`, 'ok');
-    enterOnlineTable(true);
-    window.setTimeout(()=>forceSyncStartedRoom('join-room-after-enter'), 350);
   }
 
   function attachRoom(code){
@@ -384,7 +409,9 @@
 
       if(shouldEnterGame(currentRoom)){
         await hydrateOnlineStateDirect('room-snapshot');
-        await reconnectStartedParticipant(code, currentRoom, 'room-snapshot-reconnect').catch(()=>false);
+        if(!onlineMode){
+          await reconnectStartedParticipant(code, currentRoom, 'room-snapshot-reconnect').catch(()=>false);
+        }
         enterOnlineTable(true);
         renderOnlineGame();
         if(isHost()){
@@ -421,7 +448,7 @@
       if(isHost()) scheduleBotIfNeeded('players-lobby');
     }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
 
-    // v0.7.11: ponte direta do convidado.
+    // v0.7.12: ponte direta do convidado.
     // Não depende da lista geral de jogadores. Escuta apenas o próprio documento do jogador.
     selfPlayerUnsub=playerRef(code,currentUser.uid).onSnapshot(async s=>{
       if(!s.exists) return;
@@ -439,7 +466,7 @@
       }else{
         renderOnlineGame();
       }
-    }, e=>setStatus(`Erro ao ler seu jogador: ${e.message}`,'error'));
+    }, e=>{ console.error('Erro ao ler seu jogador', e); setStatus(`Erro ao ler seu jogador: ${e.message}`,'error'); });
 
     handUnsub=handRef(code,currentUser.uid).onSnapshot(async s=>{
       currentHand=s.exists?sortCards(s.data().cards||[]):[];
@@ -451,7 +478,7 @@
       }
       renderOnlineGame();
       if(isHost()) scheduleBotIfNeeded('hand-snapshot');
-    }, e=>setStatus(`Erro ao ler suas cartas: ${e.message}`,'error'));
+    }, e=>{ console.error('Erro ao ler suas cartas', e); setStatus(`Erro ao ler suas cartas: ${e.message}`,'error'); });
 
     heartbeatTimer=window.setInterval(()=>{
       if(currentRoomCode&&currentUser){
@@ -468,7 +495,7 @@
 
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.11: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.12: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -630,7 +657,7 @@
     const roomSnap = await getDocFresh(roomRef(currentRoomCode), 'start-room');
     if(roomSnap.exists) currentRoom = {...currentRoom, ...roomSnap.data()};
     let playersNow = await fetchRoomPlayersDirect(currentRoomCode);
-    // v0.7.11: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
+    // v0.7.12: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
     await new Promise(resolve=>setTimeout(resolve, 350));
     const playersSecondRead = await fetchRoomPlayersDirect(currentRoomCode);
     const mergedPlayers = new Map();
@@ -1147,7 +1174,7 @@
       }
 
       if(hasStartedForMe(currentRoom)){
-        if(!roomUnsub || !playersUnsub || !selfPlayerUnsub || !handUnsub) attachRoom(code);
+        if(!roomUnsub || !playersUnsub || !handUnsub) attachRoom(code);
         // Se o sinal veio pelo próprio player/mão, mas o room.game ainda não chegou,
         // força mais uma leitura direta do documento da sala antes de renderizar.
         if(!currentRoom?.game){
@@ -1172,7 +1199,7 @@
   }
 
   async function recoverRememberedRoom(source='recover'){
-    // v0.7.11: não recupera sala automaticamente ao abrir a página.
+    // v0.7.12: não recupera sala automaticamente ao abrir a página.
     // A tela inicial deve sempre abrir limpa para configurar nome, sala, bots e baralhos.
     // A sincronização automática só roda depois que o usuário cria ou entra manualmente.
     return false;
