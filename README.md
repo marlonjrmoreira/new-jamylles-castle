@@ -318,7 +318,7 @@ Observação: por segurança dos navegadores, o som só inicia após a primeira 
 - Sem mudanças nas Rules do Firebase.
 
 
-## v0.7.9
+## v0.7.11
 - Correção estrutural da entrada do convidado.
 - A sessão do convidado agora é lembrada no navegador e pode ser recuperada automaticamente.
 - Ao iniciar a partida, o convidado hidrata sala, jogadores e própria mão diretamente do Firestore antes de renderizar a mesa.

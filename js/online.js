@@ -44,7 +44,7 @@
     dom.turnInfo = qs('#turnInfo'); dom.ruleHint = qs('#ruleHint'); dom.playersSummary = qs('#playersSummary');
     dom.tableCards = qs('#tableCards'); dom.roundHistory = qs('#roundHistory'); dom.playerHand = qs('#playerHand');
     dom.selectionMessage = qs('#selectionMessage'); dom.playButton = qs('#playButton'); dom.passButton = qs('#passButton');
-    dom.rematchButton = qs('#rematchButton');
+    dom.rematchButton = qs('#rematchButton'); dom.forceTableButton = qs('#forceTableButton');
   }
 
   function setStatus(message, type=''){
@@ -156,13 +156,34 @@
     try{
       app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
       auth = firebase.auth(); db = firebase.firestore();
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+      // v0.7.11: SESSION evita que duas abas normais do mesmo navegador compartilhem o mesmo jogador.
+      // LOCAL fazia convidado e anfitrião terem o mesmo UID, travando a entrada do convidado.
+      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
       const credential = auth.currentUser ? {user:auth.currentUser} : await auth.signInAnonymously();
       currentUser = credential.user || auth.currentUser;
       setStatus('Firebase conectado. Configure a sala e escolha criar ou entrar.', 'ok');
       return true;
     }catch(e){ console.error(e); setStatus(e?.code==='auth/operation-not-allowed'?'Ative Authentication > Anonymous no Firebase Console.':`Falha ao conectar: ${e?.message||e}`, 'error'); return false; }
   }
+
+  async function newAnonymousSession(reason='new-session'){
+    if(!auth) return false;
+    try{
+      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      await auth.signOut().catch(()=>{});
+      const credential = await auth.signInAnonymously();
+      currentUser = credential.user || auth.currentUser;
+      console.info('Nova sessão anônima criada:', reason, currentUser?.uid);
+      return Boolean(currentUser);
+    }catch(error){
+      console.warn('Falha ao criar nova sessão anônima:', reason, error);
+      setStatus(`Falha ao criar sessão de convidado: ${error.message || error}`, 'error');
+      return false;
+    }
+  }
+
   async function ensureReady(){ return (db && auth && currentUser) || await initFirebase(); }
 
   function openOnlineModal(){
@@ -182,7 +203,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.9: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.11: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -236,6 +257,37 @@
     rememberRoom(code, 'host'); attachRoom(code); sfx('ui'); requestAutoVoice('room-created'); setStatus(`Sala ${code} criada. Voz ativando automaticamente. Compartilhe o código com os jogadores.`, 'ok');
   }
 
+
+  async function reconnectStartedParticipant(code, room, source='reconnect'){
+    if(!code || !currentUser || !room) return false;
+
+    const playerSnap = await getDocFresh(playerRef(code,currentUser.uid), `${source}-player`);
+    const handSnap = await getDocFresh(handRef(code,currentUser.uid), `${source}-hand`);
+
+    const isInStartedList = Boolean(room?.startedPlayerUids?.includes?.(currentUser.uid));
+    const isInTurnOrder = Boolean(room?.game?.turnOrder?.includes?.(currentUser.uid));
+    const isKnownParticipant = Boolean(playerSnap.exists || handSnap.exists || isInStartedList || isInTurnOrder);
+
+    if(!isKnownParticipant) return false;
+
+    currentRoomCode = code;
+    currentRoom = room;
+    currentPlayers = await fetchRoomPlayersDirect(code).catch(() => playerSnap.exists ? [{id:playerSnap.id, ...playerSnap.data()}] : []);
+    currentHand = handSnap.exists ? sortCards(handSnap.data().cards || []) : [];
+
+    rememberRoom(code, 'guest');
+    attachRoom(code);
+
+    setStatus('Reconectando você à partida iniciada...', 'ok');
+    await hydrateOnlineStateDirect(`${source}-hydrate`);
+    enterOnlineTable(true);
+    ensureOnlineTableVisible();
+    renderOnlineGame();
+
+    window.setTimeout(() => forceGuestIntoStartedGame(`${source}-after-enter`), 250);
+    return true;
+  }
+
   async function joinRoom(){
     if(dom.modal) dom.modal.hidden=false;
     if(!await ensureReady()) return;
@@ -257,16 +309,25 @@
       return;
     }
 
-    // Ponto crítico encontrado: se o convidado abre outra aba no mesmo navegador do anfitrião,
-    // o Firebase Anonymous pode reutilizar o mesmo UID. A sala enxerga essa aba como anfitrião,
-    // não como convidado, e por isso ela fica presa no fluxo do host.
+    // v0.7.11: se a aba do convidado pegou o mesmo UID do anfitrião,
+    // cria uma nova sessão anônima automaticamente e segue a entrada.
     if(isSameHostSession(room)){
-      setStatus('Esta aba está usando a mesma sessão do anfitrião. Para testar como convidado, use outro navegador, aba anônima ou outro aparelho.', 'error');
-      return;
+      setStatus('Esta aba estava usando a mesma sessão do anfitrião. Criando sessão própria de convidado...', 'ok');
+      const changed = await newAnonymousSession('guest-same-host-uid');
+      if(!changed){
+        setStatus('Não consegui separar a sessão do convidado. Tente aba anônima, outro navegador ou outro aparelho.', 'error');
+        return;
+      }
+      if(currentUser.uid === room.hostUid){
+        setStatus('O Firebase ainda devolveu o mesmo UID do anfitrião. Use aba anônima, outro navegador ou outro aparelho.', 'error');
+        return;
+      }
     }
 
     if(room.phase!=='lobby'){
-      setStatus('Esta sala já iniciou. A entrada após o início será liberada em uma versão futura.', 'error');
+      const reconnected = await reconnectStartedParticipant(code, room, 'join-started-room');
+      if(reconnected) return;
+      setStatus('Esta sala já iniciou. Se você já estava nela, confira se está no mesmo aparelho/aba em que entrou antes. Caso contrário, peça ao anfitrião para criar uma nova sala.', 'error');
       return;
     }
 
@@ -323,6 +384,7 @@
 
       if(shouldEnterGame(currentRoom)){
         await hydrateOnlineStateDirect('room-snapshot');
+        await reconnectStartedParticipant(code, currentRoom, 'room-snapshot-reconnect').catch(()=>false);
         enterOnlineTable(true);
         renderOnlineGame();
         if(isHost()){
@@ -359,7 +421,7 @@
       if(isHost()) scheduleBotIfNeeded('players-lobby');
     }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
 
-    // v0.7.9: ponte direta do convidado.
+    // v0.7.11: ponte direta do convidado.
     // Não depende da lista geral de jogadores. Escuta apenas o próprio documento do jogador.
     selfPlayerUnsub=playerRef(code,currentUser.uid).onSnapshot(async s=>{
       if(!s.exists) return;
@@ -406,7 +468,7 @@
 
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.9: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.11: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -533,8 +595,13 @@
       dom.startButton.hidden = !isHost();
       dom.startButton.title = canStart ? 'Iniciar a partida para todos.' : (pendingGuests.length ? `Faltam ficar prontos: ${pendingGuests.map(p=>p.name||'Jogador').join(', ')}` : 'A sala precisa ter pelo menos 3 participantes somando jogadores e bots.');
     }
+    if(dom.forceTableButton){
+      const canForceTable = Boolean(!isHost() && (shouldEnterGame(currentRoom) || me?.gameStarted || me?.roomPhase === 'playing' || Number(me?.cardCount || 0) > 0));
+      dom.forceTableButton.hidden = !canForceTable;
+      dom.forceTableButton.disabled = !canForceTable;
+    }
     if(dom.bridgeNote) dom.bridgeNote.hidden = true;
-    const meta=`<div class="onlineRoomMeta"><span class="onlinePill">Baralhos: ${Number(currentRoom.deckCount||1)}</span><span class="onlinePill">Bots: ${Number(currentRoom.botCount||0)}</span><span class="onlinePill">${currentRoom.includeJokers?'Com coringas':'Sem coringas'}</span><span class="onlinePill">${currentRoom.passwordProtected?'Com senha':'Sem senha'}</span><span class="onlinePill">${currentRoom.phase==='playing'?'Em partida':currentRoom.phase==='finished'?'Encerrada':'Lobby'}</span></div>`;
+    const meta=`<div class="onlineRoomMeta"><span class="onlinePill">Baralhos: ${Number(currentRoom.deckCount||1)}</span><span class="onlinePill">Bots: ${Number(currentRoom.botCount||0)}</span><span class="onlinePill">${currentRoom.includeJokers?'Com coringas':'Sem coringas'}</span><span class="onlinePill">${currentRoom.passwordProtected?'Com senha':'Sem senha'}</span><span class="onlinePill">${currentRoom.phase==='playing'?'Em partida':currentRoom.phase==='finished'?'Encerrada':'Lobby'}</span><span class="onlinePill">UID ${String(currentUser?.uid||'').slice(0,6)}</span></div>`;
     const readyGuide = isHost()
       ? `<div class="readyGuide ${pendingGuests.length?'waiting':'allReady'}"><strong>${pendingGuests.length?'Faltam ficar prontos:':'Convidados prontos'}</strong><span>${pendingGuests.length?pendingGuests.map(p=>esc(p.name||'Jogador')).join(', '):(guests.length?'Você já pode iniciar.':'Aguardando convidados ou usando bots.')}</span></div>`
       : `<div class="readyGuide ${me?.ready?'allReady':'waiting'}"><strong>${me?.ready?'Você já está pronto':'Entrada concluída'}</strong><span>${me?.ready?'Aguarde o anfitrião iniciar.':'O jogo tentará marcar você como pronto automaticamente.'}</span></div>`;
@@ -563,7 +630,7 @@
     const roomSnap = await getDocFresh(roomRef(currentRoomCode), 'start-room');
     if(roomSnap.exists) currentRoom = {...currentRoom, ...roomSnap.data()};
     let playersNow = await fetchRoomPlayersDirect(currentRoomCode);
-    // v0.7.9: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
+    // v0.7.11: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
     await new Promise(resolve=>setTimeout(resolve, 350));
     const playersSecondRead = await fetchRoomPlayersDirect(currentRoomCode);
     const mergedPlayers = new Map();
@@ -1066,7 +1133,12 @@
 
       const me = currentPlayers.find(p => p.uid === currentUser?.uid);
       if(currentRoom && isSameHostSession(currentRoom) && !me?.isHost){
-        setStatus('Esta sessão parece igual à do anfitrião. Use outro navegador, aba anônima ou outro aparelho para convidado.', 'error');
+        const changed = await newAnonymousSession('force-guest-same-host-uid');
+        if(changed){
+          setStatus('Sessão de convidado separada. Entre na sala novamente.', 'ok');
+        }else{
+          setStatus('Esta sessão parece igual à do anfitrião. Use outro navegador, aba anônima ou outro aparelho para convidado.', 'error');
+        }
         return false;
       }
 
@@ -1100,7 +1172,7 @@
   }
 
   async function recoverRememberedRoom(source='recover'){
-    // v0.7.9: não recupera sala automaticamente ao abrir a página.
+    // v0.7.11: não recupera sala automaticamente ao abrir a página.
     // A tela inicial deve sempre abrir limpa para configurar nome, sala, bots e baralhos.
     // A sincronização automática só roda depois que o usuário cria ou entra manualmente.
     return false;
@@ -1121,6 +1193,7 @@
     if(a==='join-room')joinRoom();
     if(a==='toggle-ready')toggleReady();
     if(a==='start-online')startOnline();
+    if(a==='force-table')forceGuestIntoStartedGame('manual-force-table');
     if(a==='leave-room')leaveRoom();
     if(a==='copy-room')copyRoomCode();
   });
@@ -1141,5 +1214,5 @@
     }
   }, 650);
 
-  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom,forceEnterIfStarted,forceSyncStartedRoom,forceGuestIntoStartedGame,getDebugState:()=>({uid:currentUser?.uid,room:currentRoomCode,phase:currentRoom?.phase,gamePhase:currentRoom?.game?.phase,hand:currentHand?.length,players:currentPlayers?.length,onlineMode})};
+  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom,forceEnterIfStarted,forceSyncStartedRoom,forceGuestIntoStartedGame,getDebugState:()=>({uid:currentUser?.uid,room:currentRoomCode,hostUid:currentRoom?.hostUid,phase:currentRoom?.phase,gamePhase:currentRoom?.game?.phase,hand:currentHand?.length,players:currentPlayers?.length,onlineMode,sameHost:Boolean(currentRoom && currentUser?.uid===currentRoom.hostUid)})};
 })();
