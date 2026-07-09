@@ -304,3 +304,12 @@
 - Convidado passa a fazer leitura direta periódica do documento da sala, além dos snapshots do Firestore.
 - Se `onlineMode` já estiver ativo mas a tela ainda estiver presa no menu, a interface é forçada novamente para a mesa.
 - Sem mudanças nas Rules do Firebase.
+
+
+## v0.7.7
+- Correção estrutural da entrada do convidado.
+- A sessão do convidado agora é lembrada no navegador e pode ser recuperada automaticamente.
+- Ao iniciar a partida, o convidado hidrata sala, jogadores e própria mão diretamente do Firestore antes de renderizar a mesa.
+- A mesa é forçada a abrir após entrar na sala, e o resgate continua rodando se a tela ficar presa no menu.
+- Detecta o caso crítico em que o convidado usa a mesma sessão anônima do anfitrião, comum ao testar em duas abas do mesmo navegador.
+- Sem mudanças nas Rules do Firebase.
