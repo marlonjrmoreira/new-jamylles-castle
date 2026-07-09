@@ -27,7 +27,7 @@
   let currentRoomCode = '', currentRoom = null, currentPlayers = [], currentHand = [];
   let selectedCardIds = new Set(), onlineMode = false, processingActions = false, botBusy = false;
   let lastSfxTurnCounter = -1, lastSfxPhase = '';
-  let roomUnsub, playersUnsub, handUnsub, actionsUnsub, heartbeatTimer, botTimer, transitionTimer;
+  let roomUnsub, playersUnsub, selfPlayerUnsub, handUnsub, actionsUnsub, heartbeatTimer, botTimer, transitionTimer;
   const dom = {};
 
   function qs(s){ return document.querySelector(s); }
@@ -182,7 +182,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.8: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.9: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -359,15 +359,37 @@
       if(isHost()) scheduleBotIfNeeded('players-lobby');
     }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
 
+    // v0.7.9: ponte direta do convidado.
+    // Não depende da lista geral de jogadores. Escuta apenas o próprio documento do jogador.
+    selfPlayerUnsub=playerRef(code,currentUser.uid).onSnapshot(async s=>{
+      if(!s.exists) return;
+      const me={id:s.id,...s.data()};
+      const others=currentPlayers.filter(p=>p.uid!==currentUser?.uid);
+      currentPlayers=[...others,me].sort((a,b)=>timestampToMs(a.joinedAt)-timestampToMs(b.joinedAt));
+      const startedForThisPlayer = Boolean(
+        me.gameStarted ||
+        me.roomPhase === 'playing' ||
+        Number(me.cardCount || 0) > 0 ||
+        Number(me.startSignal || 0) > 0
+      );
+      if(startedForThisPlayer){
+        await forceGuestIntoStartedGame('self-player-start-signal');
+      }else{
+        renderOnlineGame();
+      }
+    }, e=>setStatus(`Erro ao ler seu jogador: ${e.message}`,'error'));
+
     handUnsub=handRef(code,currentUser.uid).onSnapshot(async s=>{
       currentHand=s.exists?sortCards(s.data().cards||[]):[];
-      if(s.exists && currentRoom && shouldEnterGame(currentRoom)){
+      if(s.exists && currentHand.length){
+        await forceGuestIntoStartedGame('hand-has-cards');
+      }else if(s.exists && currentRoom && shouldEnterGame(currentRoom)){
         await hydrateOnlineStateDirect('hand-snapshot');
         enterOnlineTable(true);
       }
       renderOnlineGame();
       if(isHost()) scheduleBotIfNeeded('hand-snapshot');
-    }, ()=>{});
+    }, e=>setStatus(`Erro ao ler suas cartas: ${e.message}`,'error'));
 
     heartbeatTimer=window.setInterval(()=>{
       if(currentRoomCode&&currentUser){
@@ -384,7 +406,7 @@
 
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.8: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.9: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -436,7 +458,13 @@
 
 
   function shouldEnterGame(room){
-    return Boolean(room && (room.phase === 'playing' || room.phase === 'finished' || room.game?.phase === 'playing' || room.game?.phase === 'finished'));
+    return Boolean(room && (
+      room.phase === 'playing' ||
+      room.phase === 'finished' ||
+      room.gamePhase === 'playing' ||
+      room.game?.phase === 'playing' ||
+      room.game?.phase === 'finished'
+    ));
   }
   async function forceEnterIfStarted(source='sync'){
     if(!currentRoomCode) return false;
@@ -478,8 +506,8 @@
     }, 700);
   }
   function detachRoom(){
-    if(roomUnsub)roomUnsub(); if(playersUnsub)playersUnsub(); if(handUnsub)handUnsub(); if(actionsUnsub)actionsUnsub();
-    roomUnsub=playersUnsub=handUnsub=actionsUnsub=null; window.clearInterval(heartbeatTimer); window.clearInterval(transitionTimer); window.clearTimeout(botTimer);
+    if(roomUnsub)roomUnsub(); if(playersUnsub)playersUnsub(); if(selfPlayerUnsub)selfPlayerUnsub(); if(handUnsub)handUnsub(); if(actionsUnsub)actionsUnsub();
+    roomUnsub=playersUnsub=selfPlayerUnsub=handUnsub=actionsUnsub=null; window.clearInterval(heartbeatTimer); window.clearInterval(transitionTimer); window.clearTimeout(botTimer);
   }
 
   function renderLobby(){
@@ -534,7 +562,13 @@
     if(!isHost()){setStatus('Apenas o anfitrião pode iniciar a partida.','error');return;}
     const roomSnap = await getDocFresh(roomRef(currentRoomCode), 'start-room');
     if(roomSnap.exists) currentRoom = {...currentRoom, ...roomSnap.data()};
-    const playersNow = await fetchRoomPlayersDirect(currentRoomCode);
+    let playersNow = await fetchRoomPlayersDirect(currentRoomCode);
+    // v0.7.9: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
+    await new Promise(resolve=>setTimeout(resolve, 350));
+    const playersSecondRead = await fetchRoomPlayersDirect(currentRoomCode);
+    const mergedPlayers = new Map();
+    [...playersNow, ...playersSecondRead, ...currentPlayers].forEach(p=>{ if(p?.uid) mergedPlayers.set(p.uid,p); });
+    playersNow = [...mergedPlayers.values()];
     const humans=playersNow.filter(p=>!p.isBot); const botCount=Number(currentRoom.botCount||0);
     const pending=humans.filter(p=>p.uid!==currentRoom.hostUid&&!p.ready);
     if(humans.length+botCount<3){setStatus('A partida precisa de pelo menos 3 participantes somando jogadores humanos e bots.','error');return;}
@@ -547,10 +581,10 @@
     const participants=[...humans.map(p=>({uid:p.uid,name:p.name||'Jogador',isBot:false})),...bots.map(b=>({uid:b.uid,name:b.name,isBot:true}))];
     const hands=new Map(participants.map(p=>[p.uid,[]]));
     shuffle(createDeck(Number(currentRoom.deckCount||1),Boolean(currentRoom.includeJokers))).forEach((card,i)=>hands.get(participants[i%participants.length].uid).push(card));
-    participants.forEach(p=>{ const cards=sortCards(hands.get(p.uid)||[]); batch.set(handRef(currentRoomCode,p.uid),{uid:p.uid,cards,updatedAt:ts()},{merge:true}); batch.set(playerRef(currentRoomCode,p.uid),{cardCount:cards.length,finishedPosition:null,roleTitle:'',hasPassed:false,gameStarted:true,startSignal:firebase.firestore.FieldValue.increment(1),gameStartedAt:ts()},{merge:true}); });
+    participants.forEach(p=>{ const cards=sortCards(hands.get(p.uid)||[]); batch.set(handRef(currentRoomCode,p.uid),{uid:p.uid,cards,updatedAt:ts(),gameStarted:true,roomPhase:'playing'},{merge:true}); batch.set(playerRef(currentRoomCode,p.uid),{cardCount:cards.length,finishedPosition:null,roleTitle:'',hasPassed:false,gameStarted:true,roomPhase:'playing',startSignal:firebase.firestore.FieldValue.increment(1),gameStartedAt:ts(),clientStartToken:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`},{merge:true}); });
     const starter=participants[Math.floor(Math.random()*participants.length)];
     const game={phase:'playing',turnOrder:participants.map(p=>p.uid),turnUid:starter.uid,turnName:starter.name,tableCombo:null,tableOwnerUid:'',passes:{},history:[],finishedOrder:[],turnCounter:0,lastMessage:`${starter.name} foi sorteado e inicia a partida online.`};
-    batch.set(roomRef(currentRoomCode),{phase:'playing',game,startedAt:ts(),updatedAt:ts(),publicMessage:game.lastMessage,gameStateVersion:firebase.firestore.FieldValue.increment(1),startedPlayerUids:participants.map(p=>p.uid),guestStartSignal:firebase.firestore.FieldValue.increment(1)},{merge:true});
+    batch.set(roomRef(currentRoomCode),{phase:'playing',game,gamePhase:'playing',startedAt:ts(),startedAtMs:Date.now(),updatedAt:ts(),publicMessage:game.lastMessage,gameStateVersion:firebase.firestore.FieldValue.increment(1),startedPlayerUids:participants.map(p=>p.uid),guestStartSignal:firebase.firestore.FieldValue.increment(1)},{merge:true});
     await batch.commit();
   }
 
@@ -608,7 +642,7 @@
     if(dom.playButton) dom.playButton.disabled = true;
     if(dom.passButton) dom.passButton.disabled = true;
     if(dom.rematchButton) dom.rematchButton.hidden = true;
-    if(dom.selectionMessage) dom.selectionMessage.textContent = isHost() ? 'Use o lobby para iniciar a partida.' : `Você está pronto. Sala ${currentRoomCode || ''}. UID ${String(currentUser?.uid||'').slice(0,6)}.`;
+    if(dom.selectionMessage) dom.selectionMessage.textContent = isHost() ? 'Use o lobby para iniciar a partida.' : `Pronto. Sala ${currentRoomCode || ''}. UID ${String(currentUser?.uid||'').slice(0,6)} · fase ${currentRoom?.phase || '...'} · cartas ${currentHand?.length || 0}.`;
   }
 
   function playOnlineSfx(game){
@@ -1010,9 +1044,15 @@
     const me = currentPlayers.find(p => p.uid === currentUser?.uid);
     const roomStarted = shouldEnterGame(room);
     const myHandStarted = Array.isArray(currentHand) && currentHand.length > 0;
-    const playerStarted = Boolean(me?.gameStarted || Number(me?.cardCount || 0) > 0);
+    const playerStarted = Boolean(
+      me?.gameStarted ||
+      me?.roomPhase === 'playing' ||
+      Number(me?.cardCount || 0) > 0 ||
+      Number(me?.startSignal || 0) > 0
+    );
     const inTurnOrder = Boolean(room?.game?.turnOrder?.includes?.(currentUser?.uid));
-    return Boolean(roomStarted || myHandStarted || playerStarted || inTurnOrder);
+    const inStartedList = Boolean(room?.startedPlayerUids?.includes?.(currentUser?.uid));
+    return Boolean(roomStarted || myHandStarted || playerStarted || inTurnOrder || inStartedList);
   }
 
   async function forceGuestIntoStartedGame(source='guest-hard-sync'){
@@ -1035,7 +1075,13 @@
       }
 
       if(hasStartedForMe(currentRoom)){
-        if(!roomUnsub || !playersUnsub || !handUnsub) attachRoom(code);
+        if(!roomUnsub || !playersUnsub || !selfPlayerUnsub || !handUnsub) attachRoom(code);
+        // Se o sinal veio pelo próprio player/mão, mas o room.game ainda não chegou,
+        // força mais uma leitura direta do documento da sala antes de renderizar.
+        if(!currentRoom?.game){
+          const freshRoom = await getDocFresh(roomRef(code), 'guest-final-room-read');
+          if(freshRoom.exists) currentRoom = freshRoom.data() || currentRoom;
+        }
         enterOnlineTable(true);
         ensureOnlineTableVisible();
         renderOnlineGame();
@@ -1054,7 +1100,7 @@
   }
 
   async function recoverRememberedRoom(source='recover'){
-    // v0.7.8: não recupera sala automaticamente ao abrir a página.
+    // v0.7.9: não recupera sala automaticamente ao abrir a página.
     // A tela inicial deve sempre abrir limpa para configurar nome, sala, bots e baralhos.
     // A sincronização automática só roda depois que o usuário cria ou entra manualmente.
     return false;
@@ -1095,5 +1141,5 @@
     }
   }, 650);
 
-  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom,forceEnterIfStarted,forceSyncStartedRoom};
+  window.jcOnline={openLobby:openOnlineModal,getCurrentRoomCode:()=>currentRoomCode,enterOnlineTable,isOnlineMode:()=>onlineMode,leaveRoom,forceEnterIfStarted,forceSyncStartedRoom,forceGuestIntoStartedGame,getDebugState:()=>({uid:currentUser?.uid,room:currentRoomCode,phase:currentRoom?.phase,gamePhase:currentRoom?.game?.phase,hand:currentHand?.length,players:currentPlayers?.length,onlineMode})};
 })();

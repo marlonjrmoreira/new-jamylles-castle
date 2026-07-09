@@ -306,7 +306,7 @@
 - Sem mudanças nas Rules do Firebase.
 
 
-## v0.7.8
+## v0.7.9
 - Correção estrutural da entrada do convidado.
 - A sessão do convidado agora é lembrada no navegador e pode ser recuperada automaticamente.
 - Ao iniciar a partida, o convidado hidrata sala, jogadores e própria mão diretamente do Firestore antes de renderizar a mesa.
