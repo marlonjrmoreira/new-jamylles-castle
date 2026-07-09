@@ -158,7 +158,7 @@
       app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
       auth = firebase.auth(); db = firebase.firestore();
 
-      // v0.7.12: SESSION evita que duas abas normais do mesmo navegador compartilhem o mesmo jogador.
+      // v0.7.13: SESSION evita que duas abas normais do mesmo navegador compartilhem o mesmo jogador.
       // LOCAL fazia convidado e anfitrião terem o mesmo UID, travando a entrada do convidado.
       await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
@@ -204,7 +204,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.12: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.13: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -448,20 +448,27 @@
       if(isHost()) scheduleBotIfNeeded('players-lobby');
     }, e=>setStatus(`Erro ao ler jogadores: ${e.message}`,'error'));
 
-    // v0.7.12: ponte direta do convidado.
+    // v0.7.13: ponte direta do convidado.
     // Não depende da lista geral de jogadores. Escuta apenas o próprio documento do jogador.
     selfPlayerUnsub=playerRef(code,currentUser.uid).onSnapshot(async s=>{
       if(!s.exists) return;
       const me={id:s.id,...s.data()};
       const others=currentPlayers.filter(p=>p.uid!==currentUser?.uid);
       currentPlayers=[...others,me].sort((a,b)=>timestampToMs(a.joinedAt)-timestampToMs(b.joinedAt));
+      const publicUpdated = applyPublicGameFromPlayer(me, 'self-player-public-game');
       const startedForThisPlayer = Boolean(
+        publicUpdated ||
+        me.publicGame ||
         me.gameStarted ||
         me.roomPhase === 'playing' ||
         Number(me.cardCount || 0) > 0 ||
         Number(me.startSignal || 0) > 0
       );
-      if(startedForThisPlayer){
+      if(publicUpdated){
+        enterOnlineTable(true);
+        ensureOnlineTableVisible();
+        renderOnlineGame();
+      }else if(startedForThisPlayer){
         await forceGuestIntoStartedGame('self-player-start-signal');
       }else{
         renderOnlineGame();
@@ -495,7 +502,7 @@
 
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.12: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.13: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -554,6 +561,42 @@
       room.game?.phase === 'playing' ||
       room.game?.phase === 'finished'
     ));
+  }
+
+  function broadcastGameToPlayers(batch, game, players=currentPlayers, message=''){
+    if(!batch || !currentRoomCode || !game) return;
+    const publicGame = clone(game);
+    const uids = new Set();
+    (players || []).forEach(p => { if(p?.uid) uids.add(p.uid); });
+    (game.turnOrder || []).forEach(uid => { if(uid) uids.add(uid); });
+    uids.forEach(uid => {
+      batch.set(playerRef(currentRoomCode, uid), {
+        publicGame,
+        publicPhase:game.phase || 'playing',
+        publicTurnCounter:Number(game.turnCounter || 0),
+        publicMessage:message || game.lastMessage || '',
+        publicUpdatedAt:ts()
+      }, {merge:true});
+    });
+  }
+
+  function applyPublicGameFromPlayer(player, source='public-player'){
+    if(!player?.publicGame) return false;
+    const incoming = clone(player.publicGame);
+    const incomingTurn = Number(incoming.turnCounter || player.publicTurnCounter || 0);
+    const currentTurn = Number(currentRoom?.game?.turnCounter ?? -1);
+    const currentPhase = currentRoom?.game?.phase || currentRoom?.phase || '';
+
+    if(!currentRoom?.game || incomingTurn >= currentTurn || currentPhase !== incoming.phase){
+      currentRoom = {
+        ...(currentRoom || {}),
+        phase:player.publicPhase || incoming.phase || currentRoom?.phase || 'playing',
+        game:incoming,
+        publicMessage:player.publicMessage || incoming.lastMessage || currentRoom?.publicMessage || ''
+      };
+      return true;
+    }
+    return false;
   }
   async function forceEnterIfStarted(source='sync'){
     if(!currentRoomCode) return false;
@@ -657,7 +700,7 @@
     const roomSnap = await getDocFresh(roomRef(currentRoomCode), 'start-room');
     if(roomSnap.exists) currentRoom = {...currentRoom, ...roomSnap.data()};
     let playersNow = await fetchRoomPlayersDirect(currentRoomCode);
-    // v0.7.12: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
+    // v0.7.13: pequena segunda leitura para não deixar convidado recém-entrado fora da distribuição.
     await new Promise(resolve=>setTimeout(resolve, 350));
     const playersSecondRead = await fetchRoomPlayersDirect(currentRoomCode);
     const mergedPlayers = new Map();
@@ -679,6 +722,7 @@
     const starter=participants[Math.floor(Math.random()*participants.length)];
     const game={phase:'playing',turnOrder:participants.map(p=>p.uid),turnUid:starter.uid,turnName:starter.name,tableCombo:null,tableOwnerUid:'',passes:{},history:[],finishedOrder:[],turnCounter:0,lastMessage:`${starter.name} foi sorteado e inicia a partida online.`};
     batch.set(roomRef(currentRoomCode),{phase:'playing',game,gamePhase:'playing',startedAt:ts(),startedAtMs:Date.now(),updatedAt:ts(),publicMessage:game.lastMessage,gameStateVersion:firebase.firestore.FieldValue.increment(1),startedPlayerUids:participants.map(p=>p.uid),guestStartSignal:firebase.firestore.FieldValue.increment(1)},{merge:true});
+    broadcastGameToPlayers(batch, game, participants, game.lastMessage);
     await batch.commit();
   }
 
@@ -708,7 +752,7 @@
     const game=currentRoom.game; const isMyTurn=game.phase==='playing'&&game.turnUid===currentUser?.uid;
     const turnPlayer=currentPlayers.find(p=>p.uid===game.turnUid);
     const selected=currentHand.filter(c=>selectedCardIds.has(c.id)); const reason=invalid(selected,game.tableCombo);
-    if(dom.roomInfo)dom.roomInfo.textContent=`Sala online ${currentRoomCode}`;
+    if(dom.roomInfo)dom.roomInfo.textContent=`Sala online ${currentRoomCode} · T${Number(currentRoom?.game?.turnCounter||0)}`;
     if(dom.turnInfo)dom.turnInfo.textContent=game.phase==='finished'?'Partida online encerrada':`Vez de ${turnPlayer?.name||game.turnName||'jogador'}`;
     if(dom.ruleHint)dom.ruleHint.textContent=game.tableCombo?`Vença: ${desc(game.tableCombo)}`:'Mesa livre: jogue uma ou mais cartas do mesmo valor.';
     playOnlineSfx(game); renderPlayers(game); renderTable(game); renderHistory(game); renderHand(isMyTurn); renderControls(isMyTurn,reason,selected);
@@ -796,34 +840,143 @@
   async function processActionsAsHost(actions){ if(processingActions||!isHost()||!currentRoom?.game)return; processingActions=true; try{for(const a of actions)await processActionAsHost(a);}finally{processingActions=false;}}
   async function processActionAsHost(action){ if(!action||action.processed)return; const game=currentRoom.game; if(game.phase!=='playing'||action.uid!==game.turnUid){await actionsRef(currentRoomCode).doc(action.id).set({processed:true,rejected:true},{merge:true});return;} if(action.type==='pass')await hostPass(action.uid,action.id); if(action.type==='play')await hostPlay(action.uid,action.cardIds||[],action.id);}
   async function hostPlay(uid,cardIds,actionId=null){
-    if(!isHost()||!currentRoom?.game)return; const game=clone(currentRoom.game); if(uid!==game.turnUid)return;
-    const snap=await handRef(currentRoomCode,uid).get(); const hand=snap.exists?snap.data().cards||[]:[]; const ids=new Set(cardIds); const selected=hand.filter(c=>ids.has(c.id));
-    if(!canPlay(selected,game.tableCombo)){if(actionId)await actionsRef(currentRoomCode).doc(actionId).set({processed:true,rejected:true,reason:'Jogada inválida'},{merge:true});return;}
-    const player=currentPlayers.find(p=>p.uid===uid); const remaining=hand.filter(c=>!ids.has(c.id)); const combo={power:Number(selected[0].power),count:selected.length,cards:selected.map(c=>({...c})),playerUid:uid,playerName:player?.name||'Jogador',turn:Number(game.turnCounter||0)+1};
-    game.turnCounter=combo.turn; game.tableCombo=combo; game.tableOwnerUid=uid; game.passes={}; game.history=[...(game.history||[]),{type:'play',playerUid:uid,playerName:combo.playerName,description:desc(combo),turn:combo.turn}].slice(-40); game.lastMessage=`${combo.playerName} jogou ${desc(combo)}.`;
-    if(remaining.length===0&&!(game.finishedOrder||[]).includes(uid)){game.finishedOrder=[...(game.finishedOrder||[]),uid]; game.lastMessage+=` ${combo.playerName} acabou as cartas!`;}
-    const batch=db.batch(); batch.set(handRef(currentRoomCode,uid),{cards:sortCards(remaining),updatedAt:ts()},{merge:true}); batch.set(playerRef(currentRoomCode,uid),{cardCount:remaining.length},{merge:true});
+    if(!isHost()||!currentRoom?.game)return;
+    const game=clone(currentRoom.game);
+    if(uid!==game.turnUid)return;
+
+    const snap=await handRef(currentRoomCode,uid).get();
+    const hand=snap.exists?snap.data().cards||[]:[];
+    const ids=new Set(cardIds);
+    const selected=hand.filter(c=>ids.has(c.id));
+
+    if(!canPlay(selected,game.tableCombo)){
+      if(actionId)await actionsRef(currentRoomCode).doc(actionId).set({processed:true,rejected:true,reason:'Jogada inválida'},{merge:true});
+      return;
+    }
+
+    const player=currentPlayers.find(p=>p.uid===uid);
+    const remaining=hand.filter(c=>!ids.has(c.id));
+    const combo={power:Number(selected[0].power),count:selected.length,cards:selected.map(c=>({...c})),playerUid:uid,playerName:player?.name||'Jogador',turn:Number(game.turnCounter||0)+1};
+
+    game.turnCounter=combo.turn;
+    game.tableCombo=combo;
+    game.tableOwnerUid=uid;
+    game.passes={};
+    game.history=[...(game.history||[]),{type:'play',playerUid:uid,playerName:combo.playerName,description:desc(combo),turn:combo.turn}].slice(-40);
+    game.lastMessage=`${combo.playerName} jogou ${desc(combo)}.`;
+
+    if(remaining.length===0&&!(game.finishedOrder||[]).includes(uid)){
+      game.finishedOrder=[...(game.finishedOrder||[]),uid];
+      game.lastMessage+=` ${combo.playerName} acabou as cartas!`;
+    }
+
+    const batch=db.batch();
+    batch.set(handRef(currentRoomCode,uid),{cards:sortCards(remaining),updatedAt:ts()},{merge:true});
+    batch.set(playerRef(currentRoomCode,uid),{cardCount:remaining.length},{merge:true});
+
     const unfinished=unfinishedUids(game);
-    if(unfinished.length<=1){if(unfinished[0]&&!game.finishedOrder.includes(unfinished[0]))game.finishedOrder.push(unfinished[0]); game.phase='finished'; game.turnUid=''; game.lastMessage='Fim da partida online!';}
-    else if(isBreaker(combo)){batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); window.setTimeout(()=>hostClear(uid),850); return;}
-    else{game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||'';}
-    batch.set(roomRef(currentRoomCode),{game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,phase:game.phase,game}; window.setTimeout(scheduleBotIfNeeded, 220);
+    if(unfinished.length<=1){
+      if(unfinished[0]&&!game.finishedOrder.includes(unfinished[0]))game.finishedOrder.push(unfinished[0]);
+      game.phase='finished';
+      game.turnUid='';
+      game.lastMessage='Fim da partida online!';
+    }
+    else if(isBreaker(combo)){
+      batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true});
+      broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
+      if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true});
+      await batch.commit();
+      currentRoom={...currentRoom,game};
+      window.setTimeout(()=>hostClear(uid),850);
+      return;
+    }
+    else{
+      game.turnUid=nextUid(game,uid,false);
+      game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||'';
+    }
+
+    batch.set(roomRef(currentRoomCode),{game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true});
+    broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
+    if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true});
+    await batch.commit();
+
+    currentRoom={...currentRoom,phase:game.phase,game};
+    window.setTimeout(scheduleBotIfNeeded, 220);
   }
+  
   async function hostPass(uid,actionId=null){
-    if(!isHost()||!currentRoom?.game)return; const game=clone(currentRoom.game); if(uid!==game.turnUid||!game.tableCombo)return;
-    const player=currentPlayers.find(p=>p.uid===uid); game.passes={...(game.passes||{}),[uid]:true}; game.turnCounter=Number(game.turnCounter||0)+1; game.history=[...(game.history||[]),{type:'pass',playerUid:uid,playerName:player?.name||'Jogador',turn:game.turnCounter}].slice(-40); game.lastMessage=`${player?.name||'Jogador'} passou.`;
-    const challengers=unfinishedUids(game).filter(x=>x!==game.tableOwnerUid); const everyone=challengers.length===0||challengers.every(x=>game.passes?.[x]); const batch=db.batch();
-    if(everyone){batch.set(roomRef(currentRoomCode),{game,publicMessage:'A corte observa a última jogada antes da mesa limpar.',updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,game}; window.setTimeout(()=>hostClear(game.tableOwnerUid),850); return;}
-    game.turnUid=nextUid(game,uid,false); game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true}); await batch.commit(); currentRoom={...currentRoom,game}; window.setTimeout(scheduleBotIfNeeded, 220);
+    if(!isHost()||!currentRoom?.game)return;
+    const game=clone(currentRoom.game);
+    if(uid!==game.turnUid||!game.tableCombo)return;
+
+    const player=currentPlayers.find(p=>p.uid===uid);
+    game.passes={...(game.passes||{}),[uid]:true};
+    game.turnCounter=Number(game.turnCounter||0)+1;
+    game.history=[...(game.history||[]),{type:'pass',playerUid:uid,playerName:player?.name||'Jogador',turn:game.turnCounter}].slice(-40);
+    game.lastMessage=`${player?.name||'Jogador'} passou.`;
+
+    const challengers=unfinishedUids(game).filter(x=>x!==game.tableOwnerUid);
+    const everyone=challengers.length===0||challengers.every(x=>game.passes?.[x]);
+    const batch=db.batch();
+
+    if(everyone){
+      const message='A corte observa a última jogada antes da mesa limpar.';
+      batch.set(roomRef(currentRoomCode),{game,publicMessage:message,updatedAt:ts()},{merge:true});
+      broadcastGameToPlayers(batch, game, currentPlayers, message);
+      if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true});
+      await batch.commit();
+      currentRoom={...currentRoom,game};
+      window.setTimeout(()=>hostClear(game.tableOwnerUid),850);
+      return;
+    }
+
+    game.turnUid=nextUid(game,uid,false);
+    game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||'';
+
+    batch.set(roomRef(currentRoomCode),{game,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true});
+    broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
+    if(actionId)batch.set(actionsRef(currentRoomCode).doc(actionId),{processed:true,processedAt:ts()},{merge:true});
+    await batch.commit();
+
+    currentRoom={...currentRoom,game};
+    window.setTimeout(scheduleBotIfNeeded, 220);
   }
+  
   async function hostClear(ownerUid){
-    if(!isHost())return; const snap=await getDocFresh(roomRef(currentRoomCode), 'host-clear-room'); if(!snap.exists)return; const game=clone(snap.data().game||{}); if(game.phase!=='playing')return;
-    game.tableCombo=null; game.tableOwnerUid=''; game.passes={}; const unfinished=unfinishedUids(game);
-    if(!unfinished.length){game.phase='finished'; game.turnUid='';} else if(ownerUid&&unfinished.includes(ownerUid))game.turnUid=ownerUid; else game.turnUid=nextUid(game,ownerUid||game.turnUid,true)||unfinished[0];
-    game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||''; game.lastMessage=game.phase==='finished'?'Fim da partida online!':`Mesa limpa. ${game.turnName||'Jogador'} inicia a nova rodada.`;
+    if(!isHost())return;
+    const snap=await getDocFresh(roomRef(currentRoomCode), 'host-clear-room');
+    if(!snap.exists)return;
+    const game=clone(snap.data().game||{});
+    if(game.phase!=='playing')return;
+
+    game.tableCombo=null;
+    game.tableOwnerUid='';
+    game.passes={};
+    const unfinished=unfinishedUids(game);
+
+    if(!unfinished.length){
+      game.phase='finished';
+      game.turnUid='';
+    } else if(ownerUid&&unfinished.includes(ownerUid)){
+      game.turnUid=ownerUid;
+    } else {
+      game.turnUid=nextUid(game,ownerUid||game.turnUid,true)||unfinished[0];
+    }
+
+    game.turnName=currentPlayers.find(p=>p.uid===game.turnUid)?.name||'';
+    game.lastMessage=game.phase==='finished'?'Fim da partida online!':`Mesa limpa. ${game.turnName||'Jogador'} inicia a nova rodada.`;
+
     if(game.phase !== 'finished') sfx('tableClear', 'normal');
-    await roomRef(currentRoomCode).set({game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true}); currentRoom={...currentRoom,phase:game.phase,game}; window.setTimeout(scheduleBotIfNeeded, 220);
+
+    const batch=db.batch();
+    batch.set(roomRef(currentRoomCode),{game,phase:game.phase,publicMessage:game.lastMessage,updatedAt:ts()},{merge:true});
+    broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
+    await batch.commit();
+
+    currentRoom={...currentRoom,phase:game.phase,game};
+    window.setTimeout(scheduleBotIfNeeded, 220);
   }
+  
   function scheduleBotIfNeeded(reason=''){
     if(!isHost() || !currentRoomCode) return;
     if(botTimer) return;
@@ -917,8 +1070,6 @@
     const selected = hand.filter(c => ids.has(c.id));
 
     if(!canPlay(selected, game.tableCombo)){
-      // Se a IA calculou algo que ficou inválido por mudança de estado,
-      // ela passa em mesa ocupada ou tenta menor carta em mesa livre.
       if(game.tableCombo) return applyBotPass(uid, game, 'Jogada recalculada como passe.');
       if(hand.length) return applyBotPlay(uid, [hand[0].id], game, 'Recalculado para carta mínima.');
       return applyBotEmptyHand(uid, game);
@@ -968,6 +1119,7 @@
       game.lastMessage = 'Fim da partida online!';
     }else if(isBreaker(combo)){
       batch.set(roomRef(currentRoomCode), {game, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+      broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
       await batch.commit();
       currentRoom = {...currentRoom, game};
       window.setTimeout(() => hostClear(uid), 850);
@@ -978,11 +1130,13 @@
     }
 
     batch.set(roomRef(currentRoomCode), {game, phase:game.phase, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
     await batch.commit();
+
     currentRoom = {...currentRoom, phase:game.phase, game};
     scheduleBotIfNeeded('after-bot-play');
   }
-
+  
   async function applyBotPass(uid, sourceGame, reason=''){
     if(!isHost() || !currentRoomCode) return;
     const game = clone(sourceGame || currentRoom?.game || {});
@@ -1003,7 +1157,9 @@
     batch.set(playerRef(currentRoomCode, uid), {lastAiMoveAt:ts(), lastAiReason:reason || ''}, {merge:true});
 
     if(everyone){
-      batch.set(roomRef(currentRoomCode), {game, publicMessage:'A corte observa a última jogada antes da mesa limpar.', updatedAt:ts()}, {merge:true});
+      const message='A corte observa a última jogada antes da mesa limpar.';
+      batch.set(roomRef(currentRoomCode), {game, publicMessage:message, updatedAt:ts()}, {merge:true});
+      broadcastGameToPlayers(batch, game, currentPlayers, message);
       await batch.commit();
       currentRoom = {...currentRoom, game};
       window.setTimeout(() => hostClear(game.tableOwnerUid), 850);
@@ -1014,11 +1170,13 @@
     game.turnName = currentPlayers.find(p => p.uid === game.turnUid)?.name || '';
 
     batch.set(roomRef(currentRoomCode), {game, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
     await batch.commit();
+
     currentRoom = {...currentRoom, game};
     scheduleBotIfNeeded('after-bot-pass');
   }
-
+  
   async function applyBotEmptyHand(uid, sourceGame){
     const game = clone(sourceGame || currentRoom?.game || {});
     if(!uid || game.phase !== 'playing') return;
@@ -1039,11 +1197,15 @@
       game.lastMessage = `${currentPlayers.find(p => p.uid === uid)?.name || 'Bot'} terminou as cartas.`;
     }
 
-    await roomRef(currentRoomCode).set({game, phase:game.phase, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    const batch=db.batch();
+    batch.set(roomRef(currentRoomCode), {game, phase:game.phase, publicMessage:game.lastMessage, updatedAt:ts()}, {merge:true});
+    broadcastGameToPlayers(batch, game, currentPlayers, game.lastMessage);
+    await batch.commit();
+
     currentRoom = {...currentRoom, phase:game.phase, game};
     scheduleBotIfNeeded('after-empty-bot');
   }
-
+  
   function botChooseCards(hand, table){
     const groups = new Map();
     hand.forEach(card => {
@@ -1125,6 +1287,8 @@
       if(!snap.exists) return false;
       currentRoom = snap.data() || null;
       await fetchRoomPlayersDirect(currentRoomCode);
+      const me = currentPlayers.find(p => p.uid === currentUser?.uid);
+      applyPublicGameFromPlayer(me, `hydrate-${source}`);
       await fetchMyHandDirect(currentRoomCode);
       return true;
     }catch(error){
@@ -1199,7 +1363,7 @@
   }
 
   async function recoverRememberedRoom(source='recover'){
-    // v0.7.12: não recupera sala automaticamente ao abrir a página.
+    // v0.7.13: não recupera sala automaticamente ao abrir a página.
     // A tela inicial deve sempre abrir limpa para configurar nome, sala, bots e baralhos.
     // A sincronização automática só roda depois que o usuário cria ou entra manualmente.
     return false;
