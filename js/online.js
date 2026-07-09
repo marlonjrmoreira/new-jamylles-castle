@@ -111,18 +111,18 @@
 
   function rememberRoom(code, role='player'){
     try{
-      if(code) localStorage.setItem(ROOM_MEMORY_KEY, code);
-      localStorage.setItem(ROOM_ROLE_KEY, role);
+      if(code) sessionStorage.setItem(ROOM_MEMORY_KEY, code);
+      sessionStorage.setItem(ROOM_ROLE_KEY, role);
     }catch(error){}
   }
   function forgetRememberedRoom(){
     try{
-      localStorage.removeItem(ROOM_MEMORY_KEY);
-      localStorage.removeItem(ROOM_ROLE_KEY);
+      sessionStorage.removeItem(ROOM_MEMORY_KEY);
+      sessionStorage.removeItem(ROOM_ROLE_KEY);
     }catch(error){}
   }
   function getRememberedRoom(){
-    try{ return normalizeRoomCode(localStorage.getItem(ROOM_MEMORY_KEY) || ''); }
+    try{ return normalizeRoomCode(sessionStorage.getItem(ROOM_MEMORY_KEY) || ''); }
     catch(error){ return ''; }
   }
   function isSameHostSession(room){
@@ -159,7 +159,7 @@
       await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       const credential = auth.currentUser ? {user:auth.currentUser} : await auth.signInAnonymously();
       currentUser = credential.user || auth.currentUser;
-      setStatus('Firebase conectado. Pronto para criar ou entrar em uma sala.', 'ok');
+      setStatus('Firebase conectado. Configure a sala e escolha criar ou entrar.', 'ok');
       return true;
     }catch(e){ console.error(e); setStatus(e?.code==='auth/operation-not-allowed'?'Ative Authentication > Anonymous no Firebase Console.':`Falha ao conectar: ${e?.message||e}`, 'error'); return false; }
   }
@@ -182,7 +182,7 @@
   function canRecycleRoom(room){
     const phase = room?.phase || 'lobby';
     const ageMs = Date.now() - timestampToMs(room?.updatedAt || room?.createdAt);
-    // v0.7.7: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
+    // v0.7.8: sala finalizada ou abandonada por 30 minutos pode ser reaproveitada.
     return phase === 'finished' || ageMs > 1000 * 60 * 30;
   }
   async function purgeRoomCollection(collectionRef){
@@ -304,7 +304,7 @@
   function attachRoom(code){
     detachRoom();
     currentRoomCode=code;
-    rememberRoom(code, 'attached');
+    rememberRoom(code, isHost() ? 'host' : 'guest');
 
     if(dom.homeLobbyPanel) dom.homeLobbyPanel.hidden=false;
     if(dom.lobby) dom.lobby.hidden=false;
@@ -384,7 +384,7 @@
 
   function setupHostActionListener(){
     if(actionsUnsub||!currentRoomCode||!isHost()) return;
-    // v0.7.7: sem orderBy no Firestore para não exigir índice composto.
+    // v0.7.8: sem orderBy no Firestore para não exigir índice composto.
     // A ordenação por createdAt acontece localmente no navegador do anfitrião.
     actionsUnsub=actionsRef(currentRoomCode).where('processed','==',false).onSnapshot(s=>{
       const pending=s.docs
@@ -414,7 +414,7 @@
   }
 
   async function forceSyncStartedRoom(source='sync'){
-    if(!currentRoomCode) return recoverRememberedRoom(source + '-recover');
+    if(!currentRoomCode) return false;
     try{
       await hydrateOnlineStateDirect(source);
       if(!hasStartedForMe(currentRoom)){
@@ -971,7 +971,7 @@
         }
       }catch(e){console.warn(e);}
     }
-    forgetRememberedRoom(); detachRoom(); currentRoomCode=''; currentRoom=null; currentPlayers=[]; currentHand=[]; onlineMode=false; selectedCardIds.clear(); collectDom(); if(dom.menuScreen){dom.menuScreen.style.display=''; dom.menuScreen.removeAttribute('aria-hidden'); dom.menuScreen.classList.add('active');} if(dom.gameScreen){dom.gameScreen.style.display=''; dom.gameScreen.classList.remove('active');} document.body.classList.remove('onlineGameActive'); document.documentElement.classList.remove('onlineGameActive'); renderLobby(); if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true; setStatus('Você saiu da sala.','ok');
+    forgetRememberedRoom(); forgetRememberedRoom(); detachRoom(); currentRoomCode=''; currentRoom=null; currentPlayers=[]; currentHand=[]; onlineMode=false; selectedCardIds.clear(); collectDom(); if(dom.menuScreen){dom.menuScreen.style.display=''; dom.menuScreen.removeAttribute('aria-hidden'); dom.menuScreen.classList.add('active');} if(dom.gameScreen){dom.gameScreen.style.display=''; dom.gameScreen.classList.remove('active');} document.body.classList.remove('onlineGameActive'); document.documentElement.classList.remove('onlineGameActive'); renderLobby(); if(dom.homeLobbyPanel)dom.homeLobbyPanel.hidden=true; setStatus('Você saiu da sala.','ok');
   }
   async function copyRoomCode(){ if(!currentRoomCode)return; try{await navigator.clipboard.writeText(currentRoomCode); setStatus(`Código ${currentRoomCode} copiado.`,'ok');}catch(e){setStatus(`Código da sala: ${currentRoomCode}`,'ok');}}
   async function fetchRoomPlayersDirect(code=currentRoomCode){
@@ -1054,28 +1054,10 @@
   }
 
   async function recoverRememberedRoom(source='recover'){
-    if(currentRoomCode || !await ensureReady()) return false;
-    const code = getRememberedRoom();
-    if(!code) return false;
-    try{
-      const snap = await getDocFresh(roomRef(code), `recover-${source}`);
-      if(!snap.exists){
-        forgetRememberedRoom();
-        return false;
-      }
-      currentRoom = snap.data() || null;
-      currentRoomCode = code;
-      attachRoom(code);
-      await hydrateOnlineStateDirect(source);
-      if(currentRoom && !isSameHostSession(currentRoom)){
-        enterOnlineTable(true);
-        await forceGuestIntoStartedGame(source + '-after-enter');
-      }
-      return true;
-    }catch(error){
-      console.warn('Falha ao recuperar sala lembrada:', error);
-      return false;
-    }
+    // v0.7.8: não recupera sala automaticamente ao abrir a página.
+    // A tela inicial deve sempre abrir limpa para configurar nome, sala, bots e baralhos.
+    // A sincronização automática só roda depois que o usuário cria ou entra manualmente.
+    return false;
   }
 
 
@@ -1096,14 +1078,20 @@
     if(a==='leave-room')leaveRoom();
     if(a==='copy-room')copyRoomCode();
   });
-  window.addEventListener('DOMContentLoaded',()=>{collectDom(); dom.playButton?.addEventListener('click',e=>{if(!onlineMode)return; e.preventDefault(); e.stopImmediatePropagation(); sendPlay();},true); dom.passButton?.addEventListener('click',e=>{if(!onlineMode)return; e.preventDefault(); e.stopImmediatePropagation(); sendPass();},true); window.setTimeout(()=>recoverRememberedRoom('dom-ready'), 600);});
+  window.addEventListener('DOMContentLoaded',()=>{
+    collectDom();
+    forgetRememberedRoom();
+    dom.playButton?.addEventListener('click',e=>{if(!onlineMode)return; e.preventDefault(); e.stopImmediatePropagation(); sendPlay();},true);
+    dom.passButton?.addEventListener('click',e=>{if(!onlineMode)return; e.preventDefault(); e.stopImmediatePropagation(); sendPass();},true);
+  });
   window.addEventListener('beforeunload',()=>{if(currentRoomCode&&currentUser)playerRef(currentRoomCode,currentUser.uid).set({connected:false,lastSeen:ts()},{merge:true});});
 
   window.setInterval(() => {
-    if(!currentRoomCode) recoverRememberedRoom('global-recover');
-    else forceGuestIntoStartedGame('global-hard-watch');
-    if(isHost() && currentRoom?.game?.phase === 'playing'){
-      scheduleBotIfNeeded('global-watch');
+    if(currentRoomCode){
+      forceGuestIntoStartedGame('global-hard-watch');
+      if(isHost() && currentRoom?.game?.phase === 'playing'){
+        scheduleBotIfNeeded('global-watch');
+      }
     }
   }, 650);
 
